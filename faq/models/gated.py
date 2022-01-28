@@ -3,9 +3,12 @@ from typing import Union, Dict, Any
 import torch
 
 from torch.optim import Adam
-from torchmetrics import MeanMetric
+from torchmetrics import MeanMetric, MetricCollection
 from torchmetrics.utilities.data import get_group_indexes
-from torchmetrics.functional import retrieval_reciprocal_rank
+from torchmetrics.functional import (
+    retrieval_reciprocal_rank,
+    retrieval_precision,
+)
 from pytorch_lightning.utilities.types import (
     TRAIN_DATALOADERS,
     EVAL_DATALOADERS,
@@ -31,7 +34,12 @@ class GatedModel(TrainableModel):
         self.lr = lr
         super().__init__()
 
-        self.metric = MeanMetric(compute_on_step=False)
+        self.metric = MetricCollection(
+            {
+                "rrk": MeanMetric(compute_on_step=False),
+                "rp@1": MeanMetric(compute_on_step=False),
+            }
+        )
         self.overlapping = 3
 
     def configure_encoders(self) -> Union[Encoder, Dict[str, Encoder]]:
@@ -77,8 +85,35 @@ class GatedModel(TrainableModel):
         for group in get_group_indexes(indexes=subgroups[:pairs_num]):
             mini_preds = 1.0 - distances[group]
             mini_target = labels[group] > 0
-            self.metric(retrieval_reciprocal_rank(mini_preds, mini_target))
-        self.log(f"{stage}_metric", self.metric.compute())
+            rrk = retrieval_reciprocal_rank(mini_preds, mini_target)
+            rp_at_one = retrieval_precision(mini_preds, mini_target, k=1)
+            self.log(f"{stage}_step_rrk", rrk, on_step=True, on_epoch=False)
+            self.log(
+                f"{stage}_step_rp@1", rp_at_one, on_step=True, on_epoch=False
+            )
+
+            self.metric["rrk"](rrk)
+            self.metric["rp@1"](rp_at_one)
+        self.log(
+            f"{stage}_metric",
+            self.metric.compute(),
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+        )
+
+    def on_train_epoch_start(self) -> None:
+        self.metric.reset()
+
+    def on_validation_epoch_start(self) -> None:
+        """
+            Lightning has an odd order of callbacks.
+            https://github.com/PyTorchLightning/pytorch-lightning/issues/9811
+            To use the same metric object for both training and validation
+            stages, we need to reset metric before validation starts its
+            computation
+        """
+        self.metric.reset()
 
     def training_step(self, batch, batch_idx, **kwargs) -> torch.Tensor:
         stage = TrainStage.TRAIN

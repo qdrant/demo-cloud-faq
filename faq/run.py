@@ -95,7 +95,7 @@ if __name__ == "__main__":
         "max_epochs": 10,
         "serialization_dir": "ckpts",
         "lr": 10e-2,
-        # "logger": "wandb"
+        "logger": "wandb"
     }
     pipeline = GatedModelPipeline(
         # train_dataset_path="../data/train_cloud_faq_dataset.jsonl",

@@ -39,7 +39,8 @@ class FAQDataset(IterableDataset):
             )
 
     def __iter__(self):
-        print("start ind ", self.start_index, "end ind ", self.end_index)
+        if self.start_index is not None and self.end_index:
+            print("start ind ", self.start_index, "end ind ", self.end_index)
 
         if self.start_index is not None:
             shuffled_values = self._shuffled_values[
