@@ -28,20 +28,7 @@ class FAQDataset(IterableDataset):
                 raw_dataset[line["source"]].append(line)
         return raw_dataset
 
-    @staticmethod
-    def emit_negative_sample(question, negative_samples, subgroup):
-        for negative_sample in negative_samples:
-            yield SimilarityPairSample(
-                obj_a=question,
-                obj_b=negative_sample["answer"],
-                score=0,
-                subgroup=subgroup,
-            )
-
     def __iter__(self):
-        if self.start_index is not None and self.end_index:
-            print("start ind ", self.start_index, "end ind ", self.end_index)
-
         if self.start_index is not None:
             shuffled_values = self._shuffled_values[
                 self.start_index : self.end_index
@@ -50,34 +37,12 @@ class FAQDataset(IterableDataset):
             shuffled_values = self._shuffled_values
 
         for ind, line in enumerate(shuffled_values):
-            subgroup = 0
-            if not hasattr(self, "worker_id"):
-                negative_indices = list(range(len(shuffled_values)))
-                negative_indices.remove(ind)
-                shuffled_negative_indices = random.sample(
-                    negative_indices, len(negative_indices)
-                )
-                negative_samples = (
-                    shuffled_values[index]
-                    for index in shuffled_negative_indices
-                )
+            question = line["question"]
+            subgroup = hash(question)
 
-                question = line["question"]
-                yield SimilarityPairSample(
-                    obj_a=question,
-                    obj_b=line["answer"],
-                    score=1,
-                    subgroup=subgroup,
-                )
-
-                yield from self.emit_negative_sample(
-                    question, negative_samples, subgroup
-                )
-            else:
-                question = line["question"]
-                yield SimilarityPairSample(
-                    obj_a=question, obj_b=line["answer"], score=1, subgroup=0
-                )
+            yield SimilarityPairSample(
+                obj_a=question, obj_b=line["answer"], score=1, subgroup=subgroup
+            )
 
     def __getitem__(self, index) -> SimilarityPairSample:
         raise NotImplementedError("That's a lazy reader")
