@@ -15,7 +15,6 @@ from pytorch_lightning.utilities.types import (
 )
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.models import Transformer, Pooling
-from sentence_transformers import util
 from quaterion.utils.enums import TrainStage
 from quaterion.loss.similarity_loss import SimilarityLoss
 from quaterion.train.trainable_model import TrainableModel
@@ -26,6 +25,7 @@ from quaterion_models.heads.encoder_head import EncoderHead
 from quaterion_models.encoders import Encoder
 
 from encoders.faq_encoder import FAQEncoder
+from quaterion.eval.metrics import retrieval_reciprocal_rank_2d, retrieval_precision_2d
 
 
 class GatedModel(TrainableModel):
@@ -40,13 +40,12 @@ class GatedModel(TrainableModel):
                 "rp@1": MeanMetric(compute_on_step=False),
             }
         )
-        self.overlapping = 3
 
     def configure_encoders(self) -> Union[Encoder, Dict[str, Encoder]]:
         pre_trained_model = SentenceTransformer(self._pretrained_name)
         transformer: Transformer = pre_trained_model[0]
         pooling: Pooling = pre_trained_model[1]
-        encoder = FAQEncoder(transformer, pooling)
+        encoder = FAQEncoder(transformer, pooling).to('cuda:0')
         return encoder
 
     def configure_caches(self) -> CacheConfig:
@@ -56,7 +55,7 @@ class GatedModel(TrainableModel):
         return GatedHead(input_embedding_size=input_embedding_size)
 
     def configure_loss(self) -> SimilarityLoss:
-        return ContrastiveLoss()
+        return ContrastiveLoss(margin=0.8)
 
     def process_results(
         self,
@@ -75,25 +74,20 @@ class GatedModel(TrainableModel):
         :param stage: Train, validation or test stage
         :return: None
         """
-        pairs = targets["pairs"]
-        subgroups = targets["subgroups"]
-        labels = targets["labels"]
-        rep_anchor = embeddings[pairs[:, 0]]
-        rep_other = embeddings[pairs[:, 1]]
-        distances = self.loss.distance_metric(rep_anchor, rep_other)
-        pairs_num = len(pairs)
-        for group in get_group_indexes(indexes=subgroups[:pairs_num]):
-            mini_preds = 1.0 - distances[group]
-            mini_target = labels[group] > 0
-            rrk = retrieval_reciprocal_rank(mini_preds, mini_target)
-            rp_at_one = retrieval_precision(mini_preds, mini_target, k=1)
-            self.log(f"{stage}_step_rrk", rrk, on_step=True, on_epoch=False)
-            self.log(
-                f"{stage}_step_rp@1", rp_at_one, on_step=True, on_epoch=False
-            )
+        embeddings_count = int(embeddings.shape[0])
 
-            self.metric["rrk"](rrk)
-            self.metric["rp@1"](rp_at_one)
+        distance_matrix = self.loss.distance_metric(
+            embeddings, embeddings, matrix=True
+        )
+
+        distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
+        preds = 1.0 - distance_matrix[: embeddings_count // 2, embeddings_count // 2:].to('cuda:0')
+        labels = torch.zeros(preds.shape).to('cuda:0')
+        labels[torch.eye(*labels.shape).bool()] = True
+        rrk = retrieval_reciprocal_rank_2d(preds, labels)
+        rp_at_one = retrieval_precision_2d(preds, labels)
+        self.metric["rrk"](rrk.mean())
+        self.metric["rp@1"](rp_at_one.mean())
         self.log(
             f"{stage}_metric",
             self.metric.compute(),
@@ -114,51 +108,6 @@ class GatedModel(TrainableModel):
             computation
         """
         self.metric.reset()
-
-    def training_step(self, batch, batch_idx, **kwargs) -> torch.Tensor:
-        stage = TrainStage.TRAIN
-        features, targets = batch
-        embeddings = self.model(features)
-        pos_embeddings = embeddings[:1]
-        neg_embeddings = embeddings[embeddings.shape[0] // 2 :]
-        cosine_scores = util.cos_sim(pos_embeddings, neg_embeddings).view(-1)
-
-        sort_order = cosine_scores.argsort(descending=True)
-        batch_size = int(sort_order[0].item()) + self.overlapping
-        if batch_size > cosine_scores.shape[0]:
-            batch_size = cosine_scores.shape[0]
-
-        indices = []
-        for ind, sort_ind in enumerate(sort_order):
-            if ind <= batch_size:
-                indices.append(ind)
-
-        emb = [embeddings[embeddings.shape[0] // 2 + ind] for ind in indices]
-        flatten_batch = torch.concat(emb)
-        batch = flatten_batch.view(len(emb), *pos_embeddings[0].shape)
-        anchors = pos_embeddings.repeat(batch.shape[0], 1)
-        hard_embeddings = torch.concat([batch, anchors])
-        hard_targets = {
-            "pairs": torch.LongTensor(
-                [[i, i + len(batch)] for i in range(len(batch))]
-            ),
-            "labels": torch.Tensor(
-                [targets["labels"][ind] for ind in indices]
-            ),
-            "subgroups": torch.Tensor(
-                [targets["subgroups"][ind] for ind in indices] * 2
-            ),
-        }
-        loss = self.loss(embeddings=hard_embeddings, **hard_targets)
-        self.log(f"{stage}_loss", loss)
-        self.process_results(
-            embeddings=hard_embeddings,
-            targets=hard_targets,
-            batch_idx=batch_idx,
-            stage=stage,
-            **kwargs,
-        )
-        return loss
 
     def configure_optimizers(self):
         return Adam(self.model.parameters(), lr=self.lr)

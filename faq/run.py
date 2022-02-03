@@ -56,17 +56,16 @@ class GatedModelPipeline:
                 EarlyStopping("validation_loss"),
             ],
             min_epochs=self.params.get("min_epochs", 1),
-            max_epochs=self.params.get("max_epochs", 5),
-            # auto_select_gpus=True,
+            max_epochs=self.params.get("max_epochs", 50),
+            auto_select_gpus=True,
             log_every_n_steps=self.params.get("log_every_n_steps", 1),
-            # gpus=1,
+            gpus=1,
             fast_dev_run=False,
             logger=logger,
         )
         train_samples_dataset = FAQDataset(self._train_dataset_path,)
         valid_samples_dataset = FAQDataset(self._val_dataset_path,)
 
-        print("len train samples: ", train_samples_dataset.size)
         train_loader = PairsSimilarityDataLoader(
             train_samples_dataset,
             batch_size=self.params.get(
@@ -81,6 +80,7 @@ class GatedModelPipeline:
             ),
             worker_init_fn=worker_init_fn,
         )
+        self.model.to('cuda:0')
         Quaterion.fit(self.model, trainer, train_loader, valid_loader)
 
 
@@ -92,16 +92,16 @@ if __name__ == "__main__":
 
     params = {
         "min_epochs": 2,
-        "max_epochs": 10,
+        "max_epochs": 100,
         "serialization_dir": "ckpts",
         "lr": 10e-2,
-        "logger": "wandb"
+        "logger": "wandb",
     }
     pipeline = GatedModelPipeline(
-        # train_dataset_path="../data/train_cloud_faq_dataset.jsonl",
-        # val_dataset_path="../data/val_cloud_faq_dataset.jsonl",
-        train_dataset_path="../data/btrain_part.jsonl",
-        val_dataset_path="../data/bval_part.jsonl",
+        train_dataset_path="../data/train_cloud_faq_dataset.jsonl",
+        val_dataset_path="../data/val_cloud_faq_dataset.jsonl",
+        # train_dataset_path="../data/btrain_part.jsonl",
+        # val_dataset_path="../data/bval_part.jsonl",
         params=params,
     )
 
