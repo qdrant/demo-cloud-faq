@@ -21,9 +21,6 @@ class FAQEncoder(Encoder):
         self.pooling = pooling
         self.encoder = nn.Sequential(self.transformer, self.pooling)
 
-    def device(self):
-        return next(self.parameters()).is_cuda
-
     def disable_gradients_if_required(self):
         """
         Disables gradients of the model if it is declared as not trainable
