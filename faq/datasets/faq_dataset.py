@@ -41,7 +41,10 @@ class FAQDataset(IterableDataset):
             subgroup = hash(question)
 
             yield SimilarityPairSample(
-                obj_a=question, obj_b=line["answer"], score=1, subgroup=subgroup
+                obj_a=question,
+                obj_b=line["answer"],
+                score=1,
+                subgroup=subgroup,
             )
 
     def __getitem__(self, index) -> SimilarityPairSample:

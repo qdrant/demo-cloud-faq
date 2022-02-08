@@ -3,7 +3,8 @@ from typing import Union, Dict, Any
 import torch
 
 from torch.optim import Adam
-from torchmetrics import MeanMetric, MetricCollection
+from torchmetrics import MeanMetric, MetricCollection, RetrievalMRR, \
+    RetrievalPrecision
 from torchmetrics.utilities.data import get_group_indexes
 from torchmetrics.functional import (
     retrieval_reciprocal_rank,
@@ -25,7 +26,6 @@ from quaterion_models.heads.encoder_head import EncoderHead
 from quaterion_models.encoders import Encoder
 
 from encoders.faq_encoder import FAQEncoder
-from quaterion.eval.metrics import retrieval_reciprocal_rank_2d, retrieval_precision_2d
 
 
 class GatedModel(TrainableModel):
@@ -45,7 +45,7 @@ class GatedModel(TrainableModel):
         pre_trained_model = SentenceTransformer(self._pretrained_name)
         transformer: Transformer = pre_trained_model[0]
         pooling: Pooling = pre_trained_model[1]
-        encoder = FAQEncoder(transformer, pooling).to('cuda:0')
+        encoder = FAQEncoder(transformer, pooling)
         return encoder
 
     def configure_caches(self) -> CacheConfig:
@@ -81,13 +81,18 @@ class GatedModel(TrainableModel):
         )
 
         distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
-        preds = 1.0 - distance_matrix[: embeddings_count // 2, embeddings_count // 2:].to('cuda:0')
-        labels = torch.zeros(preds.shape).to('cuda:0')
+        preds = 1.0 - distance_matrix[: embeddings_count // 2, embeddings_count // 2:]
+        labels = torch.zeros(preds.shape)
         labels[torch.eye(*labels.shape).bool()] = True
-        rrk = retrieval_reciprocal_rank_2d(preds, labels)
-        rp_at_one = retrieval_precision_2d(preds, labels)
-        self.metric["rrk"](rrk.mean())
-        self.metric["rp@1"](rp_at_one.mean())
+        indices = torch.arange(0, preds.shape[0]).view(preds.shape[0], -1).repeat(1, preds.shape[1])
+        # rrk = retrieval_reciprocal_rank_2d(preds, labels)
+        # rp_at_one = retrieval_precision_2d(preds, labels)
+        rrk_metric = RetrievalMRR()
+        rp_at_one_metric = RetrievalPrecision()
+        rrk = rrk_metric(preds, labels, indexes=indices)
+        rp_at_one = rp_at_one_metric(preds, labels, indexes=indices)
+        self.metric["rrk"](rrk)
+        self.metric["rp@1"](rp_at_one)
         self.log(
             f"{stage}_metric",
             self.metric.compute(),
