@@ -1,3 +1,6 @@
+import os
+
+from faq.config import DATA_DIR
 from faq.pipelines import (
     GatedModelPipeline,
     StackedModelPipeline,
@@ -17,10 +20,11 @@ if __name__ == "__main__":
         "serialization_dir": "ckpts",
         "lr": 0.01,
         "logger": "wandb",
+        "batch_size": 1000
     }
     pipeline = GatedModelPipeline(
-        train_dataset_path="../data/train_cloud_faq_dataset.jsonl",
-        val_dataset_path="../data/val_cloud_faq_dataset.jsonl",
+        train_dataset_path=os.path.join(DATA_DIR, "train_cloud_faq_dataset.jsonl"),
+        val_dataset_path=os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl"),
         # train_dataset_path="../data/btrain_part.jsonl",
         # val_dataset_path="../data/bval_part.jsonl",
         params=params,

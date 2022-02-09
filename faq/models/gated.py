@@ -1,38 +1,28 @@
 from typing import Union, Dict, Any
 
 import torch
-from torch.optim import Adam
-from torchmetrics import (
-    MeanMetric,
-    MetricCollection,
-    RetrievalMRR,
-    RetrievalPrecision,
-)
-from torchmetrics.utilities.data import get_group_indexes
-from torchmetrics.functional import (
-    retrieval_reciprocal_rank,
-    retrieval_precision,
-)
 from pytorch_lightning.utilities.types import (
     TRAIN_DATALOADERS,
     EVAL_DATALOADERS,
 )
+from quaterion.loss.contrastive_loss import ContrastiveLoss
+from quaterion.loss.similarity_loss import SimilarityLoss
+from quaterion.train.encoders import CacheConfig, CacheType
+from quaterion.train.trainable_model import TrainableModel
+from quaterion.utils.enums import TrainStage
+from quaterion_models.encoders import Encoder
+from quaterion_models.heads.encoder_head import EncoderHead
+from quaterion_models.heads.gated_head import GatedHead
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.models import Transformer, Pooling
-from quaterion.utils.enums import TrainStage
-from quaterion.loss.similarity_loss import SimilarityLoss
-from quaterion.train.trainable_model import TrainableModel
-from quaterion.train.encoders import CacheConfig, CacheType
-from quaterion.loss.contrastive_loss import ContrastiveLoss
-from quaterion_models.heads.gated_head import GatedHead
-from quaterion_models.heads.encoder_head import EncoderHead
-from quaterion_models.encoders import Encoder
+from torch.optim import Adam
+from torchmetrics import (
+    MeanMetric,
+    MetricCollection,
+)
 
 from faq.encoders.faq_encoder import FAQEncoder
-from quaterion.eval.metrics import (
-    retrieval_reciprocal_rank_2d,
-    retrieval_precision_2d_at_one,
-)
+from faq.utils.metrics import retrieval_reciprocal_rank_2d, retrieval_precision_2d
 
 
 class GatedModel(TrainableModel):
@@ -88,19 +78,17 @@ class GatedModel(TrainableModel):
             embeddings, embeddings, matrix=True
         )
         distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
-        preds = (
-            1.0
-            - distance_matrix[: embeddings_count // 2, embeddings_count // 2 :]
-        )
-        labels = torch.zeros(preds.shape, device=preds.device)
-        labels[torch.eye(*labels.shape).bool()] = True
-        # indices = torch.arange(0, preds.shape[0]).view(preds.shape[0], -1).repeat(1, preds.shape[1])
-        rrk = retrieval_reciprocal_rank_2d(preds, labels)
-        rp_at_one = retrieval_precision_2d_at_one(preds, labels)
-        # rrk_metric = RetrievalMRR()
-        # rp_at_one_metric = RetrievalPrecision(k=1)
-        # rrk = rrk_metric(preds, labels, indexes=indices)
-        # rp_at_one = rp_at_one_metric(preds, labels, indexes=indices)
+        predicted_similarity = 1.0 - distance_matrix
+
+        pairs = targets['pairs']
+        labels = targets['labels']
+
+        target = torch.zeros_like(distance_matrix)
+        target[pairs[:, 0], pairs[:, 1]] = labels
+
+        rrk = retrieval_reciprocal_rank_2d(predicted_similarity, target)
+        rp_at_one = retrieval_precision_2d(predicted_similarity, target)
+
         self.metric["rrk"](rrk.mean())
         self.metric["rp@1"](rp_at_one.mean())
         self.log(

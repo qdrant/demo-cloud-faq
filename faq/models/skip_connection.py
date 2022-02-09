@@ -1,10 +1,6 @@
 from typing import Union, Dict, Any
 
 import torch
-from quaterion.eval.metrics import (
-    retrieval_reciprocal_rank_2d,
-    retrieval_precision_2d_at_one,
-)
 
 from torch.optim import Adam
 from torchmetrics import (
@@ -34,6 +30,7 @@ from quaterion_models.encoders import Encoder
 
 from faq.encoders.faq_encoder import FAQEncoder
 from faq.heads.skip_connection import SkipConnectionHead
+from faq.utils.metrics import retrieval_reciprocal_rank_2d, retrieval_precision_2d
 
 
 class SkipConnectionModel(TrainableModel):
@@ -99,7 +96,7 @@ class SkipConnectionModel(TrainableModel):
         labels[torch.eye(*labels.shape).bool()] = True
         # indices = torch.arange(0, preds.shape[0]).view(preds.shape[0], -1).repeat(1, preds.shape[1])
         rrk = retrieval_reciprocal_rank_2d(preds, labels)
-        rp_at_one = retrieval_precision_2d_at_one(preds, labels)
+        rp_at_one = retrieval_precision_2d(preds, labels)
         # rrk_metric = RetrievalMRR()
         # rp_at_one_metric = RetrievalPrecision(k=1)
         # rrk = rrk_metric(preds, labels, indexes=indices)

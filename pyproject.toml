@@ -13,6 +13,8 @@ wandb = "^0.12.9"
 pandas = "^1.4.0"
 
 [tool.poetry.dev-dependencies]
+pytest = "^7.0.0"
+
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
