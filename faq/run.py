@@ -1,4 +1,4 @@
-from pipelines import (
+from faq.pipelines import (
     GatedModelPipeline,
     StackedModelPipeline,
     ProjectorModelPipeline,
@@ -18,13 +18,13 @@ if __name__ == "__main__":
         "lr": 0.01,
         "logger": "wandb",
     }
-    # pipeline = GatedModelPipeline(
-    #     train_dataset_path="../data/train_cloud_faq_dataset.jsonl",
-    #     val_dataset_path="../data/val_cloud_faq_dataset.jsonl",
-    #     # train_dataset_path="../data/btrain_part.jsonl",
-    #     # val_dataset_path="../data/bval_part.jsonl",
-    #     params=params,
-    # )
+    pipeline = GatedModelPipeline(
+        train_dataset_path="../data/train_cloud_faq_dataset.jsonl",
+        val_dataset_path="../data/val_cloud_faq_dataset.jsonl",
+        # train_dataset_path="../data/btrain_part.jsonl",
+        # val_dataset_path="../data/bval_part.jsonl",
+        params=params,
+    )
     # pipeline = ProjectorModelPipeline(
     #     train_dataset_path="../data/train_cloud_faq_dataset.jsonl",
     #     val_dataset_path="../data/val_cloud_faq_dataset.jsonl",
@@ -39,13 +39,13 @@ if __name__ == "__main__":
     #     # val_dataset_path="../data/bval_part.jsonl",
     #     params=params,
     # )
-    pipeline = StackedModelPipeline(
-        train_dataset_path="../data/train_cloud_faq_dataset.jsonl",
-        val_dataset_path="../data/val_cloud_faq_dataset.jsonl",
-        # train_dataset_path="../data/btrain_part.jsonl",
-        # val_dataset_path="../data/bval_part.jsonl",
-        params=params,
-    )
+    # pipeline = StackedModelPipeline(
+    #     train_dataset_path="../data/train_cloud_faq_dataset.jsonl",
+    #     val_dataset_path="../data/val_cloud_faq_dataset.jsonl",
+    #     # train_dataset_path="../data/btrain_part.jsonl",
+    #     # val_dataset_path="../data/bval_part.jsonl",
+    #     params=params,
+    # )
 
     import time
 

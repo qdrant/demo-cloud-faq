@@ -7,9 +7,9 @@ from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from quaterion import Quaterion
 from quaterion.dataset.similarity_data_loader import PairsSimilarityDataLoader
 
-from datasets.faq_dataset import FAQDataset
-from models.stacked_model import StackedModel
-from utils.utils import worker_init_fn
+from faq.datasets.faq_dataset import FAQDataset
+from faq.models.stacked_model import StackedModel
+from faq.utils.utils import worker_init_fn
 
 
 class StackedModelPipeline:

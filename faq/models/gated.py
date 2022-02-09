@@ -1,11 +1,6 @@
 from typing import Union, Dict, Any
 
 import torch
-from quaterion.eval.metrics import (
-    retrieval_reciprocal_rank_2d,
-    retrieval_precision_2d_at_one,
-)
-
 from torch.optim import Adam
 from torchmetrics import (
     MeanMetric,
@@ -33,7 +28,7 @@ from quaterion_models.heads.gated_head import GatedHead
 from quaterion_models.heads.encoder_head import EncoderHead
 from quaterion_models.encoders import Encoder
 
-from encoders.faq_encoder import FAQEncoder
+from faq.encoders.faq_encoder import FAQEncoder
 from quaterion.eval.metrics import (
     retrieval_reciprocal_rank_2d,
     retrieval_precision_2d_at_one,

@@ -32,8 +32,8 @@ from quaterion.loss.contrastive_loss import ContrastiveLoss
 from quaterion_models.heads.encoder_head import EncoderHead
 from quaterion_models.encoders import Encoder
 
-from encoders.faq_encoder import FAQEncoder
-from heads.stacked_head import StackedProjectionHead
+from faq.encoders.faq_encoder import FAQEncoder
+from faq.heads.stacked_head import StackedProjectionHead
 
 
 class StackedModel(TrainableModel):

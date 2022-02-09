@@ -10,9 +10,9 @@ from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from quaterion import Quaterion
 from quaterion.dataset.similarity_data_loader import PairsSimilarityDataLoader
 
-from datasets.faq_dataset import FAQDataset
-from models.skip_connection import SkipConnectionModel
-from utils.utils import worker_init_fn
+from faq.datasets.faq_dataset import FAQDataset
+from faq.models.skip_connection import SkipConnectionModel
+from faq.utils.utils import worker_init_fn
 
 
 class SkipConnectionModelPipeline:
