@@ -1,12 +1,18 @@
 from typing import Union, Dict, Any
 
 import torch
-from quaterion.eval.metrics import retrieval_reciprocal_rank_2d, \
-    retrieval_precision_2d_at_one
+from quaterion.eval.metrics import (
+    retrieval_reciprocal_rank_2d,
+    retrieval_precision_2d_at_one,
+)
 
 from torch.optim import Adam
-from torchmetrics import MeanMetric, MetricCollection, RetrievalMRR, \
-    RetrievalPrecision
+from torchmetrics import (
+    MeanMetric,
+    MetricCollection,
+    RetrievalMRR,
+    RetrievalPrecision,
+)
 from torchmetrics.utilities.data import get_group_indexes
 from torchmetrics.functional import (
     retrieval_reciprocal_rank,
@@ -28,13 +34,17 @@ from quaterion_models.heads.encoder_head import EncoderHead
 from quaterion_models.encoders import Encoder
 
 from encoders.faq_encoder import FAQEncoder
+from quaterion.eval.metrics import (
+    retrieval_reciprocal_rank_2d,
+    retrieval_precision_2d_at_one,
+)
 
 
 class GatedModel(TrainableModel):
     def __init__(self, pretrained_name="all-MiniLM-L6-v2", lr=10e-5):
         self._pretrained_name = pretrained_name
         self.lr = lr
-        print(f'models lr: {self.lr}')
+        print(f"models lr: {self.lr}")
         super().__init__()
 
         self.metric = MetricCollection(
@@ -83,7 +93,10 @@ class GatedModel(TrainableModel):
             embeddings, embeddings, matrix=True
         )
         distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
-        preds = 1.0 - distance_matrix[: embeddings_count // 2, embeddings_count // 2:]
+        preds = (
+            1.0
+            - distance_matrix[: embeddings_count // 2, embeddings_count // 2 :]
+        )
         labels = torch.zeros(preds.shape, device=preds.device)
         labels[torch.eye(*labels.shape).bool()] = True
         # indices = torch.arange(0, preds.shape[0]).view(preds.shape[0], -1).repeat(1, preds.shape[1])
