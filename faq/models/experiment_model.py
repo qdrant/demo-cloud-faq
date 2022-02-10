@@ -22,9 +22,9 @@ from quaterion_models.heads.encoder_head import EncoderHead
 from quaterion_models.encoders import Encoder
 
 from faq.encoders.faq_encoder import FAQEncoder
-from quaterion.eval.metrics import (
+from faq.utils.metrics import (
     retrieval_reciprocal_rank_2d,
-    retrieval_precision_2d_at_one,
+    retrieval_precision_2d,
 )
 
 
@@ -81,14 +81,17 @@ class ExperimentModel(TrainableModel):
             embeddings, embeddings, matrix=True
         )
         distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
-        preds = (
-            1.0
-            - distance_matrix[: embeddings_count // 2, embeddings_count // 2 :]
-        )
-        labels = torch.zeros(preds.shape, device=preds.device)
-        labels[torch.eye(*labels.shape).bool()] = True
-        rrk = retrieval_reciprocal_rank_2d(preds, labels)
-        rp_at_one = retrieval_precision_2d_at_one(preds, labels)
+        predicted_similarity = 1.0 - distance_matrix
+
+        pairs = targets['pairs']
+        labels = targets['labels']
+
+        target = torch.zeros_like(distance_matrix)
+        target[pairs[:, 0], pairs[:, 1]] = labels
+        target[pairs[:, 1], pairs[:, 0]] = labels
+
+        rrk = retrieval_reciprocal_rank_2d(predicted_similarity, target)
+        rp_at_one = retrieval_precision_2d(predicted_similarity, target)
         self.metric["rrk"](rrk.mean())
         self.metric["rp@1"](rp_at_one.mean())
         self.log(
