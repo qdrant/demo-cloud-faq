@@ -14,9 +14,10 @@ from faq.config import DATA_DIR
 from faq.datasets.faq_dataset import FAQDataset
 
 from faq.utils.utils import worker_init_fn
+from loguru import logger as log
 
 
-def run(model, train_dataset_path, val_dataset_path, params):
+def run(model, train_dataset_path, val_dataset_path, params, use_gpu):
     serialization_dir = params.get("serialization_dir", "ckpts")
     checkpoint_callback = ModelCheckpoint(
         monitor="validation_loss",
@@ -27,7 +28,11 @@ def run(model, train_dataset_path, val_dataset_path, params):
 
     logger = params.get("logger")
     if logger == "wandb":
-        logger = WandbLogger(project="faq")
+        import uuid
+
+        hparams = {key: params.get(key) for key in ("batch_size", "lr")}
+        model_name = f'{model.__class__.__name__}_{str(uuid.uuid4())[:8]}'
+        logger = WandbLogger(name = model_name, project="faq", config=hparams)
     else:
         logger = TensorBoardLogger(
             os.path.join(serialization_dir, "logs"), name="gated"
@@ -40,9 +45,9 @@ def run(model, train_dataset_path, val_dataset_path, params):
         ],
         min_epochs=params.get("min_epochs", 1),
         max_epochs=params.get("max_epochs", 50),
-        auto_select_gpus=True,
+        auto_select_gpus=use_gpu,
         log_every_n_steps=params.get("log_every_n_steps", 1),
-        gpus=1,
+        # gpus=1,
         fast_dev_run=False,
         logger=logger,
     )
@@ -70,17 +75,20 @@ if __name__ == "__main__":
 
     parameters = {
         "min_epochs": 2,
-        "max_epochs": 100,
+        "max_epochs": 5,
         "serialization_dir": "ckpts",
         "lr": 0.01,
         "logger": "wandb",
         "batch_size": 1000,
     }
+    # train_path = os.path.join(
+    #     DATA_DIR, "train_cloud_faq_dataset.jsonl"
+    # )
+    # val_path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
     train_path = os.path.join(
-        DATA_DIR, "train_cloud_faq_dataset.jsonl"
+        DATA_DIR, "btrain_part.jsonl"
     )
-    val_path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
-
+    val_path = os.path.join(DATA_DIR, "bval_part.jsonl")
     from faq.models.gated import GatedModel
 
     model_ = GatedModel(
@@ -105,6 +113,10 @@ if __name__ == "__main__":
     a = time.perf_counter()
     print("pipeline instantiated")
 
-    run(model_, train_path, val_path, parameters)
+    run(model_, train_path, val_path, parameters, False)
     print(time.perf_counter() - a)
     print("pipeline finished")
+
+    import wandb
+
+    wandb.finish()

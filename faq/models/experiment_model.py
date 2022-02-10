@@ -29,10 +29,10 @@ from quaterion.eval.metrics import (
 
 
 class ExperimentModel(TrainableModel):
-    def __init__(self, pretrained_name="all-MiniLM-L6-v2", lr=10e-5):
+    def __init__(self, pretrained_name="all-MiniLM-L6-v2", lr=10e-2):
         self._pretrained_name = pretrained_name
         self.lr = lr
-        print(f"models lr: {self.lr}")
+
         super().__init__()
 
         self.metric = MetricCollection(
