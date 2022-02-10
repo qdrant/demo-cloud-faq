@@ -1,4 +1,4 @@
-from typing import Union, Dict, Any
+from typing import Union, Dict, Any, Optional
 
 import torch
 
@@ -26,6 +26,7 @@ from faq.utils.metrics import (
     retrieval_reciprocal_rank_2d,
     retrieval_precision_2d,
 )
+from faq.utils.utils import wrong_predictions
 
 
 class ExperimentModel(TrainableModel):
@@ -83,8 +84,8 @@ class ExperimentModel(TrainableModel):
         distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
         predicted_similarity = 1.0 - distance_matrix
 
-        pairs = targets['pairs']
-        labels = targets['labels']
+        pairs = targets["pairs"]
+        labels = targets["labels"]
 
         target = torch.zeros_like(distance_matrix)
         target[pairs[:, 0], pairs[:, 1]] = labels
@@ -92,6 +93,7 @@ class ExperimentModel(TrainableModel):
 
         rrk = retrieval_reciprocal_rank_2d(predicted_similarity, target)
         rp_at_one = retrieval_precision_2d(predicted_similarity, target)
+
         self.metric["rrk"](rrk.mean())
         self.metric["rp@1"](rp_at_one.mean())
         self.log(
@@ -101,6 +103,37 @@ class ExperimentModel(TrainableModel):
             on_epoch=True,
             prog_bar=True,
         )
+
+    def predict_step(
+        self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
+    ) -> Any:
+        features, targets = batch
+        embeddings = self.model(features)
+
+        embeddings_count = int(embeddings.shape[0])
+
+        distance_matrix = self.loss.distance_metric(
+            embeddings, embeddings, matrix=True
+        )
+        distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
+        predicted_similarity = 1.0 - distance_matrix
+        res = wrong_predictions(predicted_similarity)
+
+        import json
+
+        prefix = 'valid' if dataloader_idx else 'train'
+        with open(f"{prefix}_wrong_predictions.jsonl", "w") as f:
+            for i in range(res[0].shape[0]):
+                json.dump(
+                    {
+                        "anchor": res[0][i].item(),
+                        "wrong": res[1][i].item(),
+                        "right": res[2][i].item(),
+                    },
+                    f,
+                )
+                f.write("\n")
+        return 1
 
     def on_train_epoch_start(self) -> None:
         self.metric.reset()

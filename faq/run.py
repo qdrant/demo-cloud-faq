@@ -16,7 +16,13 @@ from faq.datasets.faq_dataset import FAQDataset
 from faq.utils.utils import worker_init_fn
 
 
-def run(model, train_dataset_path, val_dataset_path, params, use_gpu=torch.cuda.is_available()):
+def run(
+    model,
+    train_dataset_path,
+    val_dataset_path,
+    params,
+    use_gpu=torch.cuda.is_available(),
+):
     serialization_dir = params.get("serialization_dir", "ckpts")
     checkpoint_callback = ModelCheckpoint(
         monitor="validation_loss",
@@ -32,10 +38,13 @@ def run(model, train_dataset_path, val_dataset_path, params, use_gpu=torch.cuda.
         hparams = {key: params.get(key) for key in ("batch_size", "lr")}
         model_name = f"{model.__class__.__name__}_{str(uuid.uuid4())[:8]}"
         logger = WandbLogger(name=model_name, project="faq", config=hparams)
-    else:
+    elif logger == "tensorboard":
         logger = TensorBoardLogger(
             os.path.join(serialization_dir, "logs"), name="gated"
         )
+    else:
+        logger = None
+
     trainer = pl.Trainer(
         # enable_checkpointing=False,
         callbacks=[
@@ -65,6 +74,59 @@ def run(model, train_dataset_path, val_dataset_path, params, use_gpu=torch.cuda.
         worker_init_fn=worker_init_fn,
     )
     Quaterion.fit(model, trainer, train_loader, valid_loader)
+    wrong_answers(trainer, model, train_loader, valid_loader)
+
+
+def wrong_answers(trainer, model, train_loader=None, valid_loader=None):
+    def map_wrong_answers(sentences_filename, indices_filename, res_filename):
+        import json
+
+        with open(sentences_filename, "r") as f:
+            anchors = []
+            others = []
+
+            for j_line in f:
+                line = json.loads(j_line)
+                anchors.append(line["question"])
+                others.append(line["answer"])
+        sentences = anchors + others
+
+        with open(indices_filename, "r") as f:
+            with open(res_filename, "w") as w:
+                for j_line in f:
+                    line = json.loads(j_line)
+                    anchor = int(line["anchor"])
+                    wrong = int(line["wrong"])
+                    right = int(line["right"])
+                    mapped_line = {
+                        "anchor": sentences[anchor],
+                        "wrong": sentences[wrong],
+                        "right": sentences[right],
+                    }
+                    json.dump(mapped_line, w)
+                    w.write("\n")
+
+    dataloaders = []
+    if train_loader is not None:
+        dataloaders.append(train_loader)
+    if valid_loader is not None:
+        dataloaders.append(valid_loader)
+    if not dataloaders:
+        raise Exception("pass at least 1 dataloader")
+    trainer.predict(model, dataloaders)
+
+    if train_loader is not None:
+        map_wrong_answers(
+            train_path,
+            "train_wrong_predictions.jsonl",
+            "train_wrong_sentences.jsonl",
+        )
+    if valid_loader is not None:
+        map_wrong_answers(
+            val_path,
+            "valid_wrong_predictions.jsonl",
+            "valid_wrong_sentences.jsonl",
+        )
 
 
 if __name__ == "__main__":
@@ -74,8 +136,8 @@ if __name__ == "__main__":
     pretrained_name = "all-MiniLM-L6-v2"
 
     parameters = {
-        "min_epochs": 2,
-        "max_epochs": 150,
+        "min_epochs": 1,
+        "max_epochs": 5,
         "serialization_dir": "ckpts",
         "lr": 0.01,
         "logger": "wandb",
@@ -83,9 +145,7 @@ if __name__ == "__main__":
     }
     train_path = os.path.join(DATA_DIR, "train_cloud_faq_dataset.jsonl")
     val_path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
-    # train_path = os.path.join(
-    #     DATA_DIR, "btrain_part.jsonl"
-    # )
+    # train_path = os.path.join(DATA_DIR, "btrain_part.jsonl")
     # val_path = os.path.join(DATA_DIR, "bval_part.jsonl")
 
     from faq.models.gated import GatedModel
