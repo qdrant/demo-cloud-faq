@@ -19,9 +19,9 @@ def worker_init_fn(worker_id):
 
 def wrong_prediction_indices(preds, mutually=False):
     num_of_pairs = preds.shape[0] // 2
-    ones_vec = torch.tensor([1]).repeat(num_of_pairs)
+    ones_vec = torch.tensor([1]).repeat(num_of_pairs).to(preds.device)
 
-    labels = torch.diag_embed(ones_vec, num_of_pairs)  # matrix with shifted
+    labels = torch.diag_embed(ones_vec, num_of_pairs).to(preds.device)  # matrix with shifted
     # by num_of_pairs diagonal to the right. Second elements of pairs are on
     # that diagonal.
     labels[torch.diag_embed(ones_vec, -num_of_pairs) > 0] = 1  # Fill diagonal
@@ -34,12 +34,10 @@ def wrong_prediction_indices(preds, mutually=False):
 
     indices = preds.topk(1)[1].squeeze()  # indices of elements with max
     # probability
-    first_half = torch.arange(0, num_of_pairs)  # indices of first elements
+    first_half = torch.arange(0, num_of_pairs).to(preds.device)  # indices of first elements
 
     if not mutually:
-        incorrect_first_elem_pairs = indices[:num_of_pairs] != torch.arange(
-            0, num_of_pairs
-        )
+        incorrect_first_elem_pairs = indices[:num_of_pairs] != first_half
 
         anchors = first_half[incorrect_first_elem_pairs]  # indices of first
         # elements for which we found wrong pairs
@@ -51,12 +49,10 @@ def wrong_prediction_indices(preds, mutually=False):
     else:
         second_half = torch.arange(num_of_pairs, num_of_pairs * 2)  # indices
         # of second elements
-        incorrect_first_elem_pairs = indices[:num_of_pairs] != torch.arange(
-            num_of_pairs, num_of_pairs * 2
-        )  # mask of incorrectly mapped first elements
-        incorrect_second_elem_pairs = indices[num_of_pairs:] != torch.arange(
-            0, num_of_pairs
-        )  # mask of incorrectly mapped second elements
+        incorrect_first_elem_pairs = indices[:num_of_pairs] != second_half  # mask of
+        # incorrectly mapped first elements
+        incorrect_second_elem_pairs = indices[num_of_pairs:] != first_half  # mask of
+        # incorrectly mapped second elements
 
         anchors = torch.cat(
             [

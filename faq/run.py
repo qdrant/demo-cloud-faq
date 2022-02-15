@@ -1,4 +1,5 @@
 import os
+import json
 
 import pytorch_lightning as pl
 import torch
@@ -11,7 +12,7 @@ from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from quaterion import Quaterion
 from quaterion.dataset.similarity_data_loader import PairsSimilarityDataLoader
 
-from faq.config import DATA_DIR
+from faq.config import DATA_DIR, ROOT_DIR
 from faq.datasets.faq_dataset import FAQDataset
 from faq.utils.utils import worker_init_fn
 
@@ -25,19 +26,30 @@ def run(
 ):
     serialization_dir = params.get("serialization_dir", "ckpts")
     checkpoint_callback = ModelCheckpoint(
-        monitor="validation_loss",
-        mode="min",
-        verbose=True,
-        dirpath=serialization_dir,
+        monitor="validation_loss", mode="min", verbose=True, dirpath=serialization_dir,
     )
+    sources = {"aws", "azure", "ibm", "yandex_cloud", "hetzner", "gcp"}
 
+    prefix = "full"
+    for source in sources:
+        if source in os.path.basename(train_dataset_path):
+            prefix = source
+            break
     logger = params.get("logger")
     if logger == "wandb":
         import uuid
 
         hparams = {key: params.get(key) for key in ("batch_size", "lr")}
-        model_name = f"{model.__class__.__name__}_{str(uuid.uuid4())[:8]}"
-        logger = WandbLogger(name=model_name, project="faq", config=hparams)
+        model_name = f"{model.__class__.__name__}_{prefix}_{str(uuid.uuid4())[:8]}"
+        save_dir = os.path.join(ROOT_DIR, "wandb_results")
+        os.makedirs(save_dir, exist_ok=True)
+
+        logger = WandbLogger(
+            name=model_name,
+            project="faq-loss-comparison",
+            config=hparams,
+            save_dir=save_dir,
+        )
     elif logger == "tensorboard":
         logger = TensorBoardLogger(
             os.path.join(serialization_dir, "logs"), name="gated"
@@ -48,12 +60,12 @@ def run(
     trainer = pl.Trainer(
         # enable_checkpointing=False,
         callbacks=[
-            checkpoint_callback,
+            # checkpoint_callback,
             ModelSummary(max_depth=3),
-            EarlyStopping("validation_loss"),
+            EarlyStopping("validation_loss", patience=7),
         ],
         min_epochs=params.get("min_epochs", 1),
-        max_epochs=params.get("max_epochs", 50),
+        max_epochs=params.get("max_epochs", 150),
         auto_select_gpus=use_gpu,
         log_every_n_steps=params.get("log_every_n_steps", 1),
         gpus=int(use_gpu),
@@ -74,10 +86,38 @@ def run(
         worker_init_fn=worker_init_fn,
     )
     Quaterion.fit(model, trainer, train_loader, valid_loader)
-    wrong_answers(trainer, model, train_loader, valid_loader)
+    wrong_answers(
+        trainer,
+        model,
+        train_loader,
+        valid_loader,
+        train_dataset_path,
+        val_dataset_path,
+    )
+
+    model_class = model.__class__.__name__
+    os.makedirs(os.path.join(DATA_DIR, "results", model_class), exist_ok=True)
+    with open(
+        os.path.join(DATA_DIR, "results", model_class, f"{prefix}.jsonl"), "w"
+    ) as f:
+        json.dump(
+            {key: value.item() for key, value in model.metric.compute().items()},
+            f,
+            indent=2,
+        )
+    import wandb
+
+    wandb.finish()
 
 
-def wrong_answers(trainer, model, train_loader=None, valid_loader=None):
+def wrong_answers(
+    trainer,
+    model,
+    train_loader=None,
+    valid_loader=None,
+    train_filename="",
+    val_filename="",
+):
     def map_wrong_answers(sentences_filename, indices_filename, res_filename):
         import json
 
@@ -106,6 +146,9 @@ def wrong_answers(trainer, model, train_loader=None, valid_loader=None):
                     json.dump(mapped_line, w)
                     w.write("\n")
 
+    model_class = model.__class__.__name__
+    os.makedirs(os.path.join(DATA_DIR, "wrong", model_class), exist_ok=True)
+
     dataloaders = []
     if train_loader is not None:
         dataloaders.append(train_loader)
@@ -115,18 +158,40 @@ def wrong_answers(trainer, model, train_loader=None, valid_loader=None):
         raise Exception("pass at least 1 dataloader")
     trainer.predict(model, dataloaders)
 
+    sources = {"aws", "azure", "ibm", "yandex_cloud", "hetzner", "gcp"}
+
     if train_loader is not None:
+
+        filename = os.path.basename(train_filename)
+        prefix = "full"
+
+        for source in sources:
+            if source in filename:
+                prefix = source
+                break
         map_wrong_answers(
-            train_path,
-            "train_wrong_predictions.jsonl",
-            "train_wrong_sentences.jsonl",
+            train_filename,
+            "train_wrong_predictions.jsonl",  # current dir, created in predict_step
+            os.path.join(
+                DATA_DIR, "wrong", model_class, f"{prefix}_train_wrong_sentences.jsonl"
+            ),
         )
+        os.remove("train_wrong_predictions.jsonl")
     if valid_loader is not None:
+        filename = os.path.basename(val_filename)
+        prefix = "full"
+        for source in sources:
+            if source in filename:
+                prefix = source
+                break
         map_wrong_answers(
-            val_path,
-            "valid_wrong_predictions.jsonl",
-            "valid_wrong_sentences.jsonl",
+            val_filename,
+            "valid_wrong_predictions.jsonl",  # current dir, created in predict_step
+            os.path.join(
+                DATA_DIR, "wrong", model_class, f"{prefix}_val_wrong_sentences.jsonl"
+            ),
         )
+        os.remove("valid_wrong_predictions.jsonl")
 
 
 if __name__ == "__main__":
@@ -137,44 +202,58 @@ if __name__ == "__main__":
 
     parameters = {
         "min_epochs": 1,
-        "max_epochs": 5,
+        "max_epochs": 150,
         "serialization_dir": "ckpts",
         "lr": 0.01,
         "logger": "wandb",
         # "batch_size": 1000,
     }
-    train_path = os.path.join(DATA_DIR, "train_cloud_faq_dataset.jsonl")
-    val_path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
-    # train_path = os.path.join(DATA_DIR, "btrain_part.jsonl")
-    # val_path = os.path.join(DATA_DIR, "bval_part.jsonl")
+
 
     from faq.models.gated import GatedModel
-
-    model_ = GatedModel(
-        pretrained_name=pretrained_name, lr=parameters.get("lr", 10e-2),
-    )
-
-    # from faq.models.projector import ProjectorModel
-    #
-    # model_ = ProjectorModel(
-    #     pretrained_name=pretrained_name, lr=parameters.get("lr", 10e-2),
-    # )
-
-    # from faq.models.stacked_model import StackedModel
-    # model_ = StackedModel(
-    #         pretrained_name=pretrained_name, lr=parameters.get("lr", 10e-2),
-    #     )
-
-    # from faq.models.skip_connection import SkipConnectionModel
-    # model_ = SkipConnectionModel(
-    #         pretrained_name=pretrained_name, lr=parameters.get("lr", 10e-2),
-    #     )
+    from faq.models.projector import ProjectorModel
+    from faq.models.stacked_model import StackedModel
+    from faq.models.skip_connection import SkipConnectionModel
 
     import time
 
-    a = time.perf_counter()
-    print("pipeline instantiated")
+    by_source_path = os.path.join(DATA_DIR, "by_source")
+    # paths = (
+    #     (
+    #         os.path.join(by_source_path, f"{prefix}_train_cloud_faq_dataset.jsonl"),
+    #         os.path.join(by_source_path, f"{prefix}_val_cloud_faq_dataset.jsonl"),
+    #     )
+    #     for prefix in (
+    #     "yandex_cloud",
+    #     "hetzner",
+    #     "gcp",
+    #     "azure",
+    #     "ibm",
+    #     "aws"
+    # )
+    # )
+    paths = (
+        (
+            os.path.join(DATA_DIR, "train_cloud_faq_dataset.jsonl"),
+            os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
+        ),
+    )
+    for pair in paths:
+        train_path, val_path = pair
+        for model_class in (
+            GatedModel,
+            ProjectorModel,
+            StackedModel,
+            SkipConnectionModel,
+        ):
+            model_ = model_class(
+                pretrained_name=pretrained_name, lr=parameters.get("lr", 10e-2)
+            )
 
-    run(model_, train_path, val_path, parameters)
-    print(time.perf_counter() - a)
-    print("pipeline finished")
+            a = time.perf_counter()
+            print("pipeline instantiated")
+
+            run(model_, train_path, val_path, parameters)
+            print(time.perf_counter() - a)
+            print("pipeline finished")
+            time.sleep(2)

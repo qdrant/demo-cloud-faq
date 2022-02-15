@@ -10,6 +10,5 @@ class SkipConnectionModel(ExperimentModel):
 
     def configure_head(self, input_embedding_size: int) -> EncoderHead:
         return SkipConnectionHead(
-            input_embedding_size=input_embedding_size,
-            output_embedding_size=input_embedding_size,
+            input_embedding_size=input_embedding_size
         )

@@ -1,3 +1,5 @@
+import json
+
 from typing import Union, Dict, Any, Optional
 
 import torch
@@ -26,7 +28,7 @@ from faq.utils.metrics import (
     retrieval_reciprocal_rank_2d,
     retrieval_precision_2d,
 )
-from faq.utils.utils import wrong_predictions
+from faq.utils.utils import wrong_prediction_indices
 
 
 class ExperimentModel(TrainableModel):
@@ -117,9 +119,7 @@ class ExperimentModel(TrainableModel):
         )
         distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
         predicted_similarity = 1.0 - distance_matrix
-        res = wrong_predictions(predicted_similarity)
-
-        import json
+        res = wrong_prediction_indices(predicted_similarity)
 
         prefix = 'valid' if dataloader_idx else 'train'
         with open(f"{prefix}_wrong_predictions.jsonl", "w") as f:
