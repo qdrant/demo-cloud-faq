@@ -10,7 +10,5 @@ def retrieval_reciprocal_rank_2d(preds, target):
 
 
 def retrieval_precision_2d(preds, target):
-    relevant = target.gather(1, preds.topk(1, dim=1)[1]).sum(axis=1).float()
+    relevant = target.gather(1, preds.topk(1, dim=1)[1]).sum(dim=1).float()
     return relevant
-
-

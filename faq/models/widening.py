@@ -1,12 +1,12 @@
-from quaterion_models.heads.encoder_head import EncoderHead
+from quaterion_models.heads import EncoderHead, WideningHead
 
-from faq.heads.skip_connection import SkipConnectionHead
+
 from faq.models.experiment_model import ExperimentModel
 
 
-class SkipConnectionModel(ExperimentModel):
+class WideningModel(ExperimentModel):
     def __init__(self, pretrained_name="all-MiniLM-L6-v2", lr=10e-2, loss_fn="mnr"):
         super().__init__(pretrained_name, lr, loss_fn)
 
     def configure_head(self, input_embedding_size: int) -> EncoderHead:
-        return SkipConnectionHead(input_embedding_size=input_embedding_size)
+        return WideningHead(input_embedding_size=input_embedding_size)
