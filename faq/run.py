@@ -1,4 +1,5 @@
 import os
+import glob
 import json
 
 import pytorch_lightning as pl
@@ -34,7 +35,7 @@ def run(
         mode="min",
         verbose=True,
         dirpath=serialization_dir,
-        filename="epoch{epoch:02d}-val_loss{validation_loss:.4f}.ckpt",
+        filename="epoch{epoch:02d}-val_loss{validation_loss:.4f}",
         auto_insert_metric_name=False,
     )
     sources = {"aws", "azure", "ibm", "yandex_cloud", "hetzner", "gcp"}
@@ -96,7 +97,7 @@ def run(
     )
 
     if not params["testing"]:  # simply train and return
-        Quaterion.fit(model, trainer, train_loader, valid_loader)
+        return Quaterion.fit(model, trainer, train_loader, valid_loader)
 
     wrong_answers(
         trainer,
@@ -105,22 +106,21 @@ def run(
         valid_loader,
         train_dataset_path,
         val_dataset_path,
-        checkpoint_callback,
-        loss_fn,
+        serialization_dir,
     )
 
-    os.makedirs(os.path.join(DATA_DIR, "results", loss_fn, model_class), exist_ok=True)
-    with open(
-        os.path.join(DATA_DIR, "results", model_class, f"{prefix}.jsonl"), "w"
-    ) as f:
+    os.makedirs(os.path.join(serialization_dir, "results"), exist_ok=True)
+    with open(os.path.join(serialization_dir, "results", f"{prefix}.jsonl"), "w") as f:
         json.dump(
             {key: value.item() for key, value in model.metric.compute().items()},
             f,
             indent=2,
         )
-    import wandb
 
-    wandb.finish()
+    if logger == "wandb":
+        import wandb
+
+        wandb.finish()
 
 
 def wrong_answers(
@@ -130,10 +130,17 @@ def wrong_answers(
     valid_loader=None,
     train_filename="",
     val_filename="",
-    checkpoint_callback=None,
-    loss_fn="mnr",
+    serialization_dir="",
 ):
-    model.load_state_dict(torch.load(checkpoint_callback.best_model_path)["state_dict"])
+    checkpoint_path = glob.glob(f"{serialization_dir}/*.ckpt")[0]
+    model.load_state_dict(torch.load(checkpoint_path)["state_dict"])
+    model.setup_dataloader(train_loader)
+    if valid_loader is not None:
+        valid_loader.collate_fn = train_loader.collate_fn
+
+    model.cache(
+        trainer=trainer, train_dataloader=train_loader, val_dataloader=valid_loader
+    )
 
     def map_wrong_answers(sentences_filename, indices_filename, res_filename):
         import json
@@ -163,8 +170,7 @@ def wrong_answers(
                     json.dump(mapped_line, w)
                     w.write("\n")
 
-    model_class = f"{model.__class__.__name__}_{loss_fn}"
-    os.makedirs(os.path.join(DATA_DIR, "wrong", model_class), exist_ok=True)
+    os.makedirs(os.path.join(serialization_dir, "wrong"), exist_ok=True)
 
     dataloaders = []
     if train_loader is not None:
@@ -190,7 +196,7 @@ def wrong_answers(
             train_filename,
             "train_wrong_predictions.jsonl",  # current dir, created in predict_step
             os.path.join(
-                DATA_DIR, "wrong", model_class, f"{prefix}_train_wrong_sentences.jsonl"
+                serialization_dir, "wrong", f"{prefix}_train_wrong_sentences.jsonl"
             ),
         )
         os.remove("train_wrong_predictions.jsonl")
@@ -205,7 +211,7 @@ def wrong_answers(
             val_filename,
             "valid_wrong_predictions.jsonl",  # current dir, created in predict_step
             os.path.join(
-                DATA_DIR, "wrong", model_class, f"{prefix}_val_wrong_sentences.jsonl"
+                serialization_dir, "wrong", f"{prefix}_val_wrong_sentences.jsonl"
             ),
         )
         os.remove("valid_wrong_predictions.jsonl")

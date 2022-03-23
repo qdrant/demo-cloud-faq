@@ -113,7 +113,7 @@ class ExperimentModel(TrainableModel):
         self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
     ) -> Any:
         features, targets = batch
-        embeddings = self.model.encode(features)
+        embeddings = self.model(features)
 
         embeddings_count = int(embeddings.shape[0])
 
