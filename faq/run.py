@@ -94,7 +94,10 @@ def run(
         batch_size=params.get("batch_size", valid_samples_dataset.size),
         worker_init_fn=worker_init_fn,
     )
-    Quaterion.fit(model, trainer, train_loader, valid_loader)
+
+    if not params["testing"]:  # simply train and return
+        Quaterion.fit(model, trainer, train_loader, valid_loader)
+
     wrong_answers(
         trainer,
         model,
@@ -214,22 +217,43 @@ if __name__ == "__main__":
     seed_everything(42, workers=True)
     pretrained_name = "all-MiniLM-L6-v2"
 
-    parameters = {
-        "min_epochs": 1,
-        "max_epochs": 150,
-        "serialization_dir": "ckpts",
-        "lr": 0.0001,
-        "logger": "tensorboard",
-        "batch_size": 1024,
-    }
-
     from faq.models.gated import GatedModel
     from faq.models.widening import WideningModel
     from faq.models.projector import ProjectorModel
     from faq.models.stacked_model import StackedModel
     from faq.models.skip_connection import SkipConnectionModel
 
+    import argparse
     import time
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--testing", action="store_true", default=False, help="Test trained models",
+    )
+    ap.add_argument("--batch_size", type=int, default=1024, help="Batch size")
+    ap.add_argument("--lr", type=float, default=0.0001, help="Learning rate")
+    ap.add_argument(
+        "--min_epochs",
+        type=int,
+        default=1,
+        help="Minimum number of epochs to run training",
+    )
+    ap.add_argument(
+        "--max_epochs",
+        type=int,
+        default=150,
+        help="Maximum number of epochs to run training",
+    )
+    ap.add_argument(
+        "--serialization_dir",
+        default="ckpts",
+        help="Directory to save checkpoints and logs",
+    )
+    ap.add_argument(
+        "--logger", type=str, choices=["tensorboard", "wandb"], default="tensorboard"
+    )
+
+    parameters = vars(ap.parse_args())
 
     by_source_path = os.path.join(DATA_DIR, "by_source")
     # paths = (
