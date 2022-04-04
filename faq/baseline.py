@@ -1,9 +1,12 @@
 import os
 import json
-import torch
 
-from quaterion.loss import ContrastiveLoss
+import torch
 from sentence_transformers import SentenceTransformer
+
+from quaterion.distances import Distance
+from quaterion.eval.pair.retrieval_precision import retrieval_precision
+from quaterion.eval.pair.retrieval_reciprocal_rank import retrieval_reciprocal_rank
 
 from faq.config import DATA_DIR
 from faq.utils.utils import wrong_prediction_indices
@@ -53,21 +56,21 @@ def process(filename):
     sentences_ = load_sentences(filename)  # load sentences, first half contains
     # all first elements, second half contains all second elements
     embeddings = model.encode(sentences_, convert_to_tensor=True)
-    distance_matrix = ContrastiveLoss().distance_metric(
-        embeddings, embeddings, matrix=True
-    )  # compute quadratic matrix of distances
-    distance_matrix[torch.eye(embeddings.shape[0], dtype=torch.bool)] = 2.0  # max
-    # cosine distance is 2, set max distance between element and itself to avoid
-    # paying attention to it
-    predicted_similarity = 2.0 - distance_matrix
+    # compute quadratic matrix of similarities
+    predicted_similarity = Distance.get_by_name(Distance.COSINE).similarity_matrix(
+        embeddings
+    )
 
-    from faq.utils.metrics import retrieval_reciprocal_rank_2d, retrieval_precision_2d
+    predicted_similarity[
+        torch.eye(embeddings.shape[0], dtype=torch.bool)
+    ] = 0.0  # set min similarity between element and itself to avoid paying attention to it
 
     num_of_pairs = predicted_similarity.shape[0] // 2
     ones_vec = torch.tensor([1]).repeat(num_of_pairs).to(embeddings.device)
 
-    labels = torch.diag_embed(ones_vec, num_of_pairs).to(embeddings.device)  # matrix with shifted
-    # by num_of_pairs diagonal to the right. Second elements of pairs are on
+    labels = torch.diag_embed(ones_vec, num_of_pairs).to(
+        embeddings.device
+    )  # matrix with shifted by num_of_pairs diagonal to the right. Second elements of pairs are on
     # that diagonal.
     labels[torch.diag_embed(ones_vec, -num_of_pairs) > 0] = 1  # Fill diagonal
     # with offset of num_of_pairs to the bottom. First elements of pairs are on
@@ -83,15 +86,10 @@ def process(filename):
     others_labels_rows = labels[num_of_pairs:]
     others_labels_columns = others_labels_rows[:, :num_of_pairs]
     fetched_labels = torch.cat([anchors_labels_columns, others_labels_columns])
+
     metrics = {
-        "rrk": retrieval_reciprocal_rank_2d(
-            fetched_predicted_similarity, fetched_labels
-        )
-        .mean()
-        .item(),
-        "rp@1": retrieval_precision_2d(fetched_predicted_similarity, fetched_labels)
-        .mean()
-        .item(),
+        "rrk": retrieval_reciprocal_rank(fetched_predicted_similarity, fetched_labels).mean().item(),
+        "rp@1": retrieval_precision(fetched_predicted_similarity, fetched_labels, 1).mean().item()
     }
     METRICS.update({os.path.basename(filename): metrics})
     print(metrics)

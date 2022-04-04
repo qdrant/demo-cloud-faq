@@ -263,8 +263,8 @@ if __name__ == "__main__":
             os.path.join(DATA_DIR, "cloud_faq_dataset.jsonl"),
         ),
     )
-    for pair in paths:
-        train_path, val_path, test_path = pair
+    for triplet in paths:
+        train_path, val_path, test_path = triplet
         for model_class in (
             GatedModel,
             WideningModel,

@@ -19,15 +19,12 @@ from quaterion.utils.enums import TrainStage
 from quaterion.loss.similarity_loss import SimilarityLoss
 from quaterion.train.trainable_model import TrainableModel
 from quaterion.train.cache import CacheConfig, CacheType
+from quaterion.eval.pair import RetrievalPrecision, RetrievalReciprocalRank
 from quaterion.loss import ContrastiveLoss, MultipleNegativesRankingLoss
 from quaterion_models.heads.encoder_head import EncoderHead
 from quaterion_models.encoders import Encoder
 
 from faq.encoders.faq_encoder import FAQEncoder
-from faq.utils.metrics import (
-    retrieval_reciprocal_rank_2d,
-    retrieval_precision_2d,
-)
 from faq.utils.utils import wrong_prediction_indices
 
 
@@ -84,24 +81,24 @@ class ExperimentModel(TrainableModel):
         :param stage: Train, validation or test stage
         :return: None
         """
-        embeddings_count = int(embeddings.shape[0])
+        rrk = RetrievalReciprocalRank(self.loss.distance_metric_name)
+        rrk.update(
+            embeddings,
+            targets["pairs"],
+            targets["labels"],
+            targets["subgroups"],
+        )
 
-        distance_matrix = self.loss.distance_metric(embeddings, embeddings, matrix=True)
-        distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
-        predicted_similarity = 1.0 - distance_matrix
+        rp_at_one = RetrievalPrecision(self.loss.distance_metric_name)
+        rp_at_one.update(
+            embeddings,
+            targets["pairs"],
+            targets["labels"],
+            targets["subgroups"],
+        )
 
-        pairs = targets["pairs"]
-        labels = targets["labels"]
-
-        target = torch.zeros_like(distance_matrix)
-        target[pairs[:, 0], pairs[:, 1]] = labels
-        target[pairs[:, 1], pairs[:, 0]] = labels
-
-        rrk = retrieval_reciprocal_rank_2d(predicted_similarity, target)
-        rp_at_one = retrieval_precision_2d(predicted_similarity, target)
-
-        self.metric["rrk"](rrk.mean())
-        self.metric["rp@1"](rp_at_one.mean())
+        self.metric["rrk"](rrk.compute().mean())
+        self.metric["rp@1"](rp_at_one.compute().mean())
         self.log(
             f"{stage}_metric",
             self.metric.compute(),
@@ -114,31 +111,26 @@ class ExperimentModel(TrainableModel):
     def test_step(
         self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
     ) -> Any:
-
         features, targets = batch
         embeddings = self.model(features)
 
         embeddings_count = int(embeddings.shape[0])
 
-        distance_matrix = self.loss.distance_metric(embeddings, embeddings, matrix=True)
-        distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
-        predicted_similarity = 1.0 - distance_matrix
+        predicted_similarity = self.loss.distance_metric.similarity_matrix(embeddings)
+        predicted_similarity[torch.eye(embeddings_count, dtype=torch.bool)] = 0.0
 
-        pairs = targets["pairs"]
-        labels = targets["labels"]
+        rrk = RetrievalReciprocalRank()
+        rrk.update(embeddings, **targets)
 
-        target = torch.zeros_like(distance_matrix)
-        target[pairs[:, 0], pairs[:, 1]] = labels
-        target[pairs[:, 1], pairs[:, 0]] = labels
+        rp_at_one = RetrievalPrecision(k=1)
+        rp_at_one.update(embeddings, **targets)
 
-        rrk = retrieval_reciprocal_rank_2d(predicted_similarity, target)
-        rp_at_one = retrieval_precision_2d(predicted_similarity, target)
+        self.metric['rrk'](rrk.compute().mean())
+        self.metric['rp@1'](rp_at_one.compute().mean())
 
-        self.metric["rrk"](rrk.mean())
-        self.metric["rp@1"](rp_at_one.mean())
         self.metric_last_state[TrainStage.TEST] = self.metric.compute()
-
         res = wrong_prediction_indices(predicted_similarity)
+
         with open(f"wrong_predictions.jsonl", "w") as f:
             for i in range(res[0].shape[0]):
                 json.dump(
@@ -186,3 +178,4 @@ class ExperimentModel(TrainableModel):
         pass
 
     # endregion
+
