@@ -1,7 +1,9 @@
 import os
+import glob
 import json
 
 import pytorch_lightning as pl
+
 import torch
 from pytorch_lightning.callbacks import (
     ModelCheckpoint,
@@ -21,12 +23,22 @@ def run(
     model,
     train_dataset_path,
     val_dataset_path,
+    test_dataset_path,
     params,
     use_gpu=torch.cuda.is_available(),
+    loss_fn="mnr",
 ):
-    serialization_dir = params.get("serialization_dir", "ckpts")
+    model_class = model.__class__.__name__
+    serialization_dir = os.path.join(
+        params.get("serialization_dir", "ckpts"), loss_fn, model_class
+    )
     checkpoint_callback = ModelCheckpoint(
-        monitor="validation_loss", mode="min", verbose=True, dirpath=serialization_dir,
+        monitor="validation_loss",
+        mode="min",
+        verbose=True,
+        dirpath=serialization_dir,
+        filename="epoch{epoch:02d}-val_loss{validation_loss:.4f}",
+        auto_insert_metric_name=False,
     )
     sources = {"aws", "azure", "ibm", "yandex_cloud", "hetzner", "gcp"}
 
@@ -40,7 +52,7 @@ def run(
         import uuid
 
         hparams = {key: params.get(key) for key in ("batch_size", "lr")}
-        model_name = f"{model.__class__.__name__}_{prefix}_{str(uuid.uuid4())[:8]}"
+        model_name = f"{model_class}_{prefix}_{str(uuid.uuid4())[:8]}"
         save_dir = os.path.join(ROOT_DIR, "wandb_results")
         os.makedirs(save_dir, exist_ok=True)
 
@@ -52,7 +64,7 @@ def run(
         )
     elif logger == "tensorboard":
         logger = TensorBoardLogger(
-            os.path.join(serialization_dir, "logs"), name="gated"
+            os.path.join(serialization_dir, "logs"), name=f"{model_class}_{loss_fn}"
         )
     else:
         logger = None
@@ -60,7 +72,7 @@ def run(
     trainer = pl.Trainer(
         # enable_checkpointing=False,
         callbacks=[
-            # checkpoint_callback,
+            checkpoint_callback,
             ModelSummary(max_depth=3),
             EarlyStopping("validation_loss", patience=7),
         ],
@@ -74,6 +86,7 @@ def run(
     )
     train_samples_dataset = FAQDataset(train_dataset_path,)
     valid_samples_dataset = FAQDataset(val_dataset_path,)
+    test_samples_dataset = FAQDataset(test_dataset_path,)
 
     train_loader = PairsSimilarityDataLoader(
         train_samples_dataset,
@@ -85,39 +98,53 @@ def run(
         batch_size=params.get("batch_size", valid_samples_dataset.size),
         worker_init_fn=worker_init_fn,
     )
-    Quaterion.fit(model, trainer, train_loader, valid_loader)
+
+    if not params["testing"]:  # simply train and return
+        Quaterion.fit(model, trainer, train_loader, valid_loader)
+
+    test_loader = PairsSimilarityDataLoader(
+        test_samples_dataset,
+        batch_size=params.get("batch_size", test_samples_dataset.size),
+        worker_init_fn=worker_init_fn
+    )
+
     wrong_answers(
         trainer,
         model,
-        train_loader,
-        valid_loader,
-        train_dataset_path,
-        val_dataset_path,
+        test_loader,
+        test_dataset_path,
+        serialization_dir,
     )
 
-    model_class = model.__class__.__name__
-    os.makedirs(os.path.join(DATA_DIR, "results", model_class), exist_ok=True)
-    with open(
-        os.path.join(DATA_DIR, "results", model_class, f"{prefix}.jsonl"), "w"
-    ) as f:
+    os.makedirs(os.path.join(serialization_dir, "results"), exist_ok=True)
+    with open(os.path.join(serialization_dir, "results", f"{prefix}.jsonl"), "w") as f:
         json.dump(
-            {key: value.item() for key, value in model.metric.compute().items()},
+            {stage: {key: value.item() for key, value in metric.items()} for stage, metric in model.metric_last_state.items()},
             f,
             indent=2,
         )
-    import wandb
 
-    wandb.finish()
+    if logger == "wandb":
+        import wandb
+
+        wandb.finish()
 
 
 def wrong_answers(
     trainer,
     model,
-    train_loader=None,
-    valid_loader=None,
-    train_filename="",
-    val_filename="",
+    test_loader,
+    test_filename,
+    serialization_dir="",
 ):
+    checkpoint_path = glob.glob(f"{serialization_dir}/*.ckpt")[0]
+    model.load_state_dict(torch.load(checkpoint_path)["state_dict"])
+    model.setup_dataloader(test_loader)
+
+    model.cache(
+        trainer=trainer, train_dataloader=test_loader, val_dataloader=None
+    )
+
     def map_wrong_answers(sentences_filename, indices_filename, res_filename):
         import json
 
@@ -146,52 +173,28 @@ def wrong_answers(
                     json.dump(mapped_line, w)
                     w.write("\n")
 
-    model_class = model.__class__.__name__
-    os.makedirs(os.path.join(DATA_DIR, "wrong", model_class), exist_ok=True)
+    os.makedirs(os.path.join(serialization_dir, "wrong"), exist_ok=True)
 
-    dataloaders = []
-    if train_loader is not None:
-        dataloaders.append(train_loader)
-    if valid_loader is not None:
-        dataloaders.append(valid_loader)
-    if not dataloaders:
-        raise Exception("pass at least 1 dataloader")
-    trainer.predict(model, dataloaders)
+    trainer.test(model, [test_loader])
 
     sources = {"aws", "azure", "ibm", "yandex_cloud", "hetzner", "gcp"}
 
-    if train_loader is not None:
+    filename = os.path.basename(test_filename)
+    prefix = "full"
 
-        filename = os.path.basename(train_filename)
-        prefix = "full"
+    for source in sources:
+        if source in filename:
+            prefix = source
+            break
 
-        for source in sources:
-            if source in filename:
-                prefix = source
-                break
-        map_wrong_answers(
-            train_filename,
-            "train_wrong_predictions.jsonl",  # current dir, created in predict_step
-            os.path.join(
-                DATA_DIR, "wrong", model_class, f"{prefix}_train_wrong_sentences.jsonl"
-            ),
-        )
-        os.remove("train_wrong_predictions.jsonl")
-    if valid_loader is not None:
-        filename = os.path.basename(val_filename)
-        prefix = "full"
-        for source in sources:
-            if source in filename:
-                prefix = source
-                break
-        map_wrong_answers(
-            val_filename,
-            "valid_wrong_predictions.jsonl",  # current dir, created in predict_step
-            os.path.join(
-                DATA_DIR, "wrong", model_class, f"{prefix}_val_wrong_sentences.jsonl"
-            ),
-        )
-        os.remove("valid_wrong_predictions.jsonl")
+    map_wrong_answers(
+        test_filename,
+        f"wrong_predictions.jsonl",  # current dir, created in test_step
+        os.path.join(
+            serialization_dir, "wrong", f"{prefix}_wrong_sentences.jsonl"
+        ),
+    )
+    os.remove(f"wrong_predictions.jsonl")
 
 
 if __name__ == "__main__":
@@ -200,22 +203,43 @@ if __name__ == "__main__":
     seed_everything(42, workers=True)
     pretrained_name = "all-MiniLM-L6-v2"
 
-    parameters = {
-        "min_epochs": 1,
-        "max_epochs": 150,
-        "serialization_dir": "ckpts",
-        "lr": 0.01,
-        "logger": "wandb",
-        # "batch_size": 1000,
-    }
-
-
     from faq.models.gated import GatedModel
+    from faq.models.widening import WideningModel
     from faq.models.projector import ProjectorModel
     from faq.models.stacked_model import StackedModel
     from faq.models.skip_connection import SkipConnectionModel
 
+    import argparse
     import time
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--testing", action="store_true", default=False, help="Test trained models",
+    )
+    ap.add_argument("--batch_size", type=int, default=1024, help="Batch size")
+    ap.add_argument("--lr", type=float, default=0.0001, help="Learning rate")
+    ap.add_argument(
+        "--min_epochs",
+        type=int,
+        default=1,
+        help="Minimum number of epochs to run training",
+    )
+    ap.add_argument(
+        "--max_epochs",
+        type=int,
+        default=150,
+        help="Maximum number of epochs to run training",
+    )
+    ap.add_argument(
+        "--serialization_dir",
+        default="ckpts",
+        help="Directory to save checkpoints and logs",
+    )
+    ap.add_argument(
+        "--logger", type=str, choices=["tensorboard", "wandb"], default="tensorboard"
+    )
+
+    parameters = vars(ap.parse_args())
 
     by_source_path = os.path.join(DATA_DIR, "by_source")
     # paths = (
@@ -235,25 +259,30 @@ if __name__ == "__main__":
     paths = (
         (
             os.path.join(DATA_DIR, "train_cloud_faq_dataset.jsonl"),
-            os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
+            os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl"),
+            os.path.join(DATA_DIR, "cloud_faq_dataset.jsonl"),
         ),
     )
     for pair in paths:
-        train_path, val_path = pair
+        train_path, val_path, test_path = pair
         for model_class in (
             GatedModel,
-            ProjectorModel,
-            StackedModel,
-            SkipConnectionModel,
+            WideningModel,
+            # ProjectorModel,
+            # StackedModel,
+            # SkipConnectionModel,
         ):
-            model_ = model_class(
-                pretrained_name=pretrained_name, lr=parameters.get("lr", 10e-2)
-            )
+            for loss_fn in ["mnr", "contrastive"]:
+                model_ = model_class(
+                    pretrained_name=pretrained_name,
+                    lr=parameters.get("lr", 10e-2),
+                    loss_fn=loss_fn,
+                )
 
-            a = time.perf_counter()
-            print("pipeline instantiated")
+                a = time.perf_counter()
+                print("pipeline instantiated")
 
-            run(model_, train_path, val_path, parameters)
-            print(time.perf_counter() - a)
-            print("pipeline finished")
-            time.sleep(2)
+                run(model_, train_path, val_path, test_path, parameters, loss_fn=loss_fn)
+                print(time.perf_counter() - a)
+                print("pipeline finished")
+                time.sleep(2)
