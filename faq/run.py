@@ -3,6 +3,7 @@ import glob
 import json
 
 import pytorch_lightning as pl
+
 import torch
 from pytorch_lightning.callbacks import (
     ModelCheckpoint,
@@ -22,6 +23,7 @@ def run(
     model,
     train_dataset_path,
     val_dataset_path,
+    test_dataset_path,
     params,
     use_gpu=torch.cuda.is_available(),
     loss_fn="mnr",
@@ -84,6 +86,7 @@ def run(
     )
     train_samples_dataset = FAQDataset(train_dataset_path,)
     valid_samples_dataset = FAQDataset(val_dataset_path,)
+    test_samples_dataset = FAQDataset(test_dataset_path,)
 
     train_loader = PairsSimilarityDataLoader(
         train_samples_dataset,
@@ -97,22 +100,26 @@ def run(
     )
 
     if not params["testing"]:  # simply train and return
-        return Quaterion.fit(model, trainer, train_loader, valid_loader)
+        Quaterion.fit(model, trainer, train_loader, valid_loader)
+
+    test_loader = PairsSimilarityDataLoader(
+        test_samples_dataset,
+        batch_size=params.get("batch_size", test_samples_dataset.size),
+        worker_init_fn=worker_init_fn
+    )
 
     wrong_answers(
         trainer,
         model,
-        train_loader,
-        valid_loader,
-        train_dataset_path,
-        val_dataset_path,
+        test_loader,
+        test_dataset_path,
         serialization_dir,
     )
 
     os.makedirs(os.path.join(serialization_dir, "results"), exist_ok=True)
     with open(os.path.join(serialization_dir, "results", f"{prefix}.jsonl"), "w") as f:
         json.dump(
-            {key: value.item() for key, value in model.metric.compute().items()},
+            {stage: {key: value.item() for key, value in metric.items()} for stage, metric in model.metric_last_state.items()},
             f,
             indent=2,
         )
@@ -126,20 +133,16 @@ def run(
 def wrong_answers(
     trainer,
     model,
-    train_loader=None,
-    valid_loader=None,
-    train_filename="",
-    val_filename="",
+    test_loader,
+    test_filename,
     serialization_dir="",
 ):
     checkpoint_path = glob.glob(f"{serialization_dir}/*.ckpt")[0]
     model.load_state_dict(torch.load(checkpoint_path)["state_dict"])
-    model.setup_dataloader(train_loader)
-    if valid_loader is not None:
-        valid_loader.collate_fn = train_loader.collate_fn
+    model.setup_dataloader(test_loader)
 
     model.cache(
-        trainer=trainer, train_dataloader=train_loader, val_dataloader=valid_loader
+        trainer=trainer, train_dataloader=test_loader, val_dataloader=None
     )
 
     def map_wrong_answers(sentences_filename, indices_filename, res_filename):
@@ -172,49 +175,26 @@ def wrong_answers(
 
     os.makedirs(os.path.join(serialization_dir, "wrong"), exist_ok=True)
 
-    dataloaders = []
-    if train_loader is not None:
-        dataloaders.append(train_loader)
-    if valid_loader is not None:
-        dataloaders.append(valid_loader)
-    if not dataloaders:
-        raise Exception("pass at least 1 dataloader")
-    trainer.test(model, dataloaders)
+    trainer.test(model, [test_loader])
 
     sources = {"aws", "azure", "ibm", "yandex_cloud", "hetzner", "gcp"}
 
-    if train_loader is not None:
+    filename = os.path.basename(test_filename)
+    prefix = "full"
 
-        filename = os.path.basename(train_filename)
-        prefix = "full"
+    for source in sources:
+        if source in filename:
+            prefix = source
+            break
 
-        for source in sources:
-            if source in filename:
-                prefix = source
-                break
-        map_wrong_answers(
-            train_filename,
-            "train_wrong_predictions.jsonl",  # current dir, created in predict_step
-            os.path.join(
-                serialization_dir, "wrong", f"{prefix}_train_wrong_sentences.jsonl"
-            ),
-        )
-        os.remove("train_wrong_predictions.jsonl")
-    if valid_loader is not None:
-        filename = os.path.basename(val_filename)
-        prefix = "full"
-        for source in sources:
-            if source in filename:
-                prefix = source
-                break
-        map_wrong_answers(
-            val_filename,
-            "valid_wrong_predictions.jsonl",  # current dir, created in predict_step
-            os.path.join(
-                serialization_dir, "wrong", f"{prefix}_val_wrong_sentences.jsonl"
-            ),
-        )
-        os.remove("valid_wrong_predictions.jsonl")
+    map_wrong_answers(
+        test_filename,
+        f"wrong_predictions.jsonl",  # current dir, created in test_step
+        os.path.join(
+            serialization_dir, "wrong", f"{prefix}_wrong_sentences.jsonl"
+        ),
+    )
+    os.remove(f"wrong_predictions.jsonl")
 
 
 if __name__ == "__main__":
@@ -280,10 +260,11 @@ if __name__ == "__main__":
         (
             os.path.join(DATA_DIR, "train_cloud_faq_dataset.jsonl"),
             os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl"),
+            os.path.join(DATA_DIR, "cloud_faq_dataset.jsonl"),
         ),
     )
     for pair in paths:
-        train_path, val_path = pair
+        train_path, val_path, test_path = pair
         for model_class in (
             GatedModel,
             WideningModel,
@@ -301,7 +282,7 @@ if __name__ == "__main__":
                 a = time.perf_counter()
                 print("pipeline instantiated")
 
-                run(model_, train_path, val_path, parameters, loss_fn=loss_fn)
+                run(model_, train_path, val_path, test_path, parameters, loss_fn=loss_fn)
                 print(time.perf_counter() - a)
                 print("pipeline finished")
                 time.sleep(2)
