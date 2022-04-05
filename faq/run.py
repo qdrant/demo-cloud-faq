@@ -285,16 +285,16 @@ if __name__ == "__main__":
     for pair in paths:
         train_path, val_path = pair
         for model_class in (
-            GatedModel,
-            WideningModel,
+            # GatedModel,
+            # WideningModel,
             # ProjectorModel,
             # StackedModel,
-            # SkipConnectionModel,
+            SkipConnectionModel,
         ):
-            for loss_fn in ["mnr", "contrastive"]:
+            for loss_fn in ["mnr", ]:  # "contrastive"]:
                 model_ = model_class(
                     pretrained_name=pretrained_name,
-                    lr=parameters.get("lr", 10e-2),
+                    lr=parameters.get("lr"),
                     loss_fn=loss_fn,
                 )
 
