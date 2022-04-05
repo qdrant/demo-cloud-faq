@@ -84,17 +84,13 @@ class ExperimentModel(TrainableModel):
         rrk = RetrievalReciprocalRank(self.loss.distance_metric_name)
         rrk.update(
             embeddings,
-            targets["pairs"],
-            targets["labels"],
-            targets["subgroups"],
+            **targets
         )
 
         rp_at_one = RetrievalPrecision(self.loss.distance_metric_name)
         rp_at_one.update(
             embeddings,
-            targets["pairs"],
-            targets["labels"],
-            targets["subgroups"],
+            **targets
         )
 
         self.metric["rrk"](rrk.compute().mean())
