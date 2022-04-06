@@ -16,17 +16,11 @@ def run(model, train_dataset_path, val_dataset_path, params):
     use_gpu = params.get("cuda", torch.cuda.is_available())
 
     checkpoint_callback = ModelCheckpoint(
-        monitor="validation_loss",
-        mode="min",
-        verbose=True,
-        dirpath=checkpoint_dir,
+        monitor="validation_loss", mode="min", verbose=True, dirpath=checkpoint_dir,
     )
 
     trainer = pl.Trainer(
-        callbacks=[
-            checkpoint_callback,
-            ModelSummary(max_depth=3),
-        ],
+        callbacks=[checkpoint_callback, ModelSummary(max_depth=3),],
         min_epochs=params.get("min_epochs", 1),
         max_epochs=params.get("max_epochs", 150),
         auto_select_gpus=use_gpu,
@@ -47,7 +41,7 @@ def run(model, train_dataset_path, val_dataset_path, params):
     Quaterion.fit(model, trainer, train_dataloader, val_dataloader)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import os
     import time
 
@@ -65,13 +59,10 @@ if __name__ == '__main__':
         "max_epochs": 2,
         "train_batch_size": 16,
         "val_batch_size": 16,
-        "checkpoint_dir": os.path.join(ROOT_DIR, 'checkpoints')
+        "checkpoint_dir": os.path.join(ROOT_DIR, "checkpoints"),
     }
     faq_model = FAQModel(pretrained_name=pretrained_name, lr=learning_rate)
     train_path = os.path.join(DATA_DIR, "train_cloud_faq_dataset.jsonl")
     val_path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
     run(faq_model, train_path, val_path, parameters)
-    faq_model.save_servable('servable')
-
-
-
+    faq_model.save_servable("servable")

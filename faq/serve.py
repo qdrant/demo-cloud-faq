@@ -45,8 +45,8 @@ class ServeFAQDataset(Dataset):
             sentences = []
             for json_line in fd:
                 line = json.loads(json_line)
-                sentences.append(line['question'])
-                sentences.append(line['answer'])
+                sentences.append(line["question"])
+                sentences.append(line["answer"])
             return sentences
 
 
@@ -69,4 +69,4 @@ if __name__ == "__main__":
     nearest = torch.argsort(distance_matrix, dim=-1)[:, 0]
     for i in range(len(dataset)):
         print("Anchor: ", dataset[i])
-        print("Nearest: ", dataset[nearest[i]], end='\n\n')
+        print("Nearest: ", dataset[nearest[i]], end="\n\n")

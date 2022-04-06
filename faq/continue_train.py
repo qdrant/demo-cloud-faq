@@ -24,7 +24,8 @@ def run(model, train_dataset_path, val_dataset_path, params):
                     "monitor": "validation_loss",
                     "mode": "min",
                     "dirpath": os.path.join(ROOT_DIR, "checkpoints"),
-                }),
+                }
+            ),
             # EarlyStopping(**{'monitor': 'validation_loss', 'mode': 'min'}),
         ],
         min_epochs=params.get("min_epochs", 1),

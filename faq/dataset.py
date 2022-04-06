@@ -7,18 +7,16 @@ from quaterion.dataset.similarity_samples import SimilarityPairSample
 
 class FAQDataset(Dataset):
     """Dataset class to process .jsonl files with FAQ from popular cloud providers."""
+
     def __init__(self, dataset_path):
         self.dataset: List[Dict[str, str]] = self.read_dataset(dataset_path)
 
     def __getitem__(self, index) -> SimilarityPairSample:
         line = self.dataset[index]
-        question = line['question']
+        question = line["question"]
         subgroup = hash(question)
         return SimilarityPairSample(
-            obj_a=line['question'],
-            obj_b=line['answer'],
-            score=1,
-            subgroup=subgroup
+            obj_a=line["question"], obj_b=line["answer"], score=1, subgroup=subgroup
         )
 
     def __len__(self):
