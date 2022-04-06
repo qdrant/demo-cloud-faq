@@ -291,7 +291,7 @@ if __name__ == "__main__":
             # StackedModel,
             SkipConnectionModel,
         ):
-            for loss_fn in ["mnr", ]:  # "contrastive"]:
+            for loss_fn in ["contrastive"]:  # also:  "mnr",
                 model_ = model_class(
                     pretrained_name=pretrained_name,
                     lr=parameters.get("lr"),
