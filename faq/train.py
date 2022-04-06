@@ -43,14 +43,12 @@ def run(model, train_dataset_path, val_dataset_path, params):
 
 if __name__ == "__main__":
     import os
-    import time
 
     from pytorch_lightning import seed_everything
 
     from faq.model import FAQModel
     from faq.config import DATA_DIR, ROOT_DIR
 
-    start = time.perf_counter()
     seed_everything(42, workers=True)
 
     pretrained_name = "all-MiniLM-L6-v2"

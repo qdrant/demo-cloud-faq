@@ -53,7 +53,7 @@ class ServeFAQDataset(Dataset):
 if __name__ == "__main__":
     loaded_model = MetricModel.load(os.path.join(ROOT_DIR, "servable"))
 
-    path = os.path.join(DATA_DIR, "val_part.jsonl")
+    path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
     dataset = ServeFAQDataset(path)
     dataloader = DataLoader(dataset, collate_fn=loaded_model.get_collate_fn())
 
