@@ -21,17 +21,7 @@ class FAQEncoder(Encoder):
         self.pooling = pooling
         self.encoder = nn.Sequential(self.transformer, self.pooling)
 
-    def disable_gradients_if_required(self):
-        """
-        Disables gradients of the model if it is declared as not trainable
-
-        :return:
-        """
-
-        if not self.trainable():
-            for _, weights in self.named_parameters():
-                weights.requires_grad = False
-
+    @property
     def trainable(self) -> bool:
         """
         Defines if encoder is trainable. This flag affects caching and
@@ -40,6 +30,7 @@ class FAQEncoder(Encoder):
         """
         return self._trainable
 
+    @property
     def embedding_size(self) -> int:
         """
         :return: Size of resulting embedding
