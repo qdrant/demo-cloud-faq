@@ -46,6 +46,7 @@ class ExperimentModel(TrainableModel):
                 "rp@1": MeanMetric(compute_on_step=False),
             }
         )
+        self.metric_last_state = {}
 
     def configure_encoders(self) -> Union[Encoder, Dict[str, Encoder]]:
         pre_trained_model = SentenceTransformer(self._pretrained_name)
@@ -109,10 +110,12 @@ class ExperimentModel(TrainableModel):
             on_epoch=True,
             prog_bar=True,
         )
+        self.metric_last_state[stage] = self.metric.compute()
 
     def test_step(
         self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
     ) -> Any:
+
         features, targets = batch
         embeddings = self.model(features)
 
@@ -121,10 +124,23 @@ class ExperimentModel(TrainableModel):
         distance_matrix = self.loss.distance_metric(embeddings, embeddings, matrix=True)
         distance_matrix[torch.eye(embeddings_count, dtype=torch.bool)] = 1.0
         predicted_similarity = 1.0 - distance_matrix
-        res = wrong_prediction_indices(predicted_similarity)
 
-        prefix = "valid" if dataloader_idx else "train"
-        with open(f"{prefix}_wrong_predictions.jsonl", "w") as f:
+        pairs = targets["pairs"]
+        labels = targets["labels"]
+
+        target = torch.zeros_like(distance_matrix)
+        target[pairs[:, 0], pairs[:, 1]] = labels
+        target[pairs[:, 1], pairs[:, 0]] = labels
+
+        rrk = retrieval_reciprocal_rank_2d(predicted_similarity, target)
+        rp_at_one = retrieval_precision_2d(predicted_similarity, target)
+
+        self.metric["rrk"](rrk.mean())
+        self.metric["rp@1"](rp_at_one.mean())
+        self.metric_last_state[TrainStage.TEST] = self.metric.compute()
+
+        res = wrong_prediction_indices(predicted_similarity)
+        with open(f"wrong_predictions.jsonl", "w") as f:
             for i in range(res[0].shape[0]):
                 json.dump(
                     {
@@ -148,6 +164,9 @@ class ExperimentModel(TrainableModel):
         stages, we need to reset metric before validation starts its
         computation
         """
+        self.metric.reset()
+
+    def on_test_epoch_start(self):
         self.metric.reset()
 
     def configure_optimizers(self):
