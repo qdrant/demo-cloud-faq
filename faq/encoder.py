@@ -49,8 +49,8 @@ class FAQEncoder(Encoder):
         os.makedirs(transformer_path, exist_ok=True)
         pooling_path = self._pooling_path(output_path)
         os.makedirs(pooling_path, exist_ok=True)
-        self.transformer.save(self._transformer_path(output_path))
-        self.pooling.save(self._pooling_path(output_path))
+        self.transformer.save(transformer_path)
+        self.pooling.save(pooling_path)
 
     @classmethod
     def load(cls, input_path: str) -> Encoder:
