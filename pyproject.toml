@@ -8,7 +8,7 @@ authors = ["George Panchuk"]
 python = ">=3.8,<3.10"
 torch = "^1.10.1"
 sentence-transformers = "^2.1.0"
-quaterion = "^0.1.14"
+quaterion = "^0.1.16"
 wandb = "^0.12.9"
 pandas = "^1.4.0"
 

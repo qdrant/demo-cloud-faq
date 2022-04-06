@@ -10,6 +10,7 @@ class ProjectionHead(EncoderHead):
         self.output_embeddings_size = output_embedding_size
         self.fc = torch.nn.Linear(input_embedding_size, output_embedding_size)
 
+    @property
     def output_size(self) -> int:
         return self.output_embedding_size
 

@@ -34,6 +34,7 @@ class StackedProjectionHead(EncoderHead):
                     nn.Linear(self._output_sizes[i - 1], self._output_sizes[i])
                 )
 
+    @property
     def output_size(self) -> int:
         return self._output_sizes[-1]
 
