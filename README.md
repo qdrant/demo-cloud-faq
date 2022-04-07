@@ -53,8 +53,20 @@ Quaterion also provides functionality to measure distances via different approac
 euclidean, manhattan distances and even an interpretation of dot_product as a distance are 
 available out-of-the-box via Distance class.
 
+One of the further steps is to configure encoders to be able to calculate embeddings. Encoder is
+a model which accepts some input and emits an embedding. In most of the situations you will use
+one pre-trained model as an encoder, but there is also a possibility to configure several encoders 
+simultaneously or train them yourself.
 
-To configure encoder...
+Encoders prone to time-consuming computations, but in case if they are frozen - there is a tool
+to mitigate their heaviness. If encoders are frozen, they are deterministic and emits exactly the
+same embeddings for the same input data each epoch. So why not to avoid this and reduce training
+time? For this purpose Quaterion has a cache. Before training starts, cache runs one epoch to 
+calculate all embeddings from frozen encoders and then store them on a device you chose
+(currently CPU or GPU). Everything you need to do is to define which encoders are trainable
+and which are not and set cache settings. And that's it: everything else Quaterion will handle
+for you.
+
 
 
 
