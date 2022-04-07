@@ -16,6 +16,7 @@ class FAQEncoder(Encoder):
         self.pooling = pooling
         self.encoder = nn.Sequential(self.transformer, self.pooling)
 
+    @property
     def trainable(self) -> bool:
         """Defines if encoder is trainable.
 
