@@ -54,7 +54,9 @@ class FAQModel(TrainableModel):
         stage: TrainStage,
         **kwargs,
     ):
-        self.retrieval_reciprocal_rank.update(embeddings, **targets)
+        device = embeddings.device
+
+        self.retrieval_reciprocal_rank.update(embeddings, **targets, device=device)
 
         self.log(
             f"{stage}.rrk",
@@ -65,7 +67,7 @@ class FAQModel(TrainableModel):
         )
         self.retrieval_reciprocal_rank.reset()
 
-        self.retrieval_precision.update(embeddings, **targets)
+        self.retrieval_precision.update(embeddings, **targets, device=device)
         self.log(
             f"{stage}.rp@1",
             self.retrieval_precision.compute().mean(),
