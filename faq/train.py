@@ -1,9 +1,6 @@
 import torch
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import (
-    ModelCheckpoint,
-    ModelSummary,
-)
+from pytorch_lightning.callbacks import ModelCheckpoint, ModelSummary, EarlyStopping
 
 from quaterion import Quaterion
 from quaterion.dataset import PairsSimilarityDataLoader
@@ -20,7 +17,11 @@ def run(model, train_dataset_path, val_dataset_path, params):
     )
 
     trainer = pl.Trainer(
-        callbacks=[checkpoint_callback, ModelSummary(max_depth=3),],
+        callbacks=[
+            checkpoint_callback,
+            ModelSummary(max_depth=3),
+            EarlyStopping(monitor="validation_loss", patience=7),
+        ],
         min_epochs=params.get("min_epochs", 1),
         max_epochs=params.get("max_epochs", 150),
         auto_select_gpus=use_gpu,
@@ -54,9 +55,9 @@ if __name__ == "__main__":
     pretrained_name = "all-MiniLM-L6-v2"
     learning_rate = 10e-2
     parameters = {
-        "max_epochs": 2,
-        "train_batch_size": 16,
-        "val_batch_size": 16,
+        "max_epochs": 150,
+        "train_batch_size": 1024,
+        "val_batch_size": 1024,
         "checkpoint_dir": os.path.join(ROOT_DIR, "checkpoints"),
     }
     faq_model = FAQModel(pretrained_name=pretrained_name, lr=learning_rate)

@@ -54,35 +54,24 @@ class FAQModel(TrainableModel):
         stage: TrainStage,
         **kwargs,
     ):
-        self.retrieval_precision.update(embeddings, **targets)
         self.retrieval_reciprocal_rank.update(embeddings, **targets)
 
-    def _log_and_reset_metrics(self, stage):
-        if len(self.retrieval_precision.embeddings):
-            self.log(
-                f"{stage}.rrk",
-                self.retrieval_reciprocal_rank.compute().mean(),
-                prog_bar=True,
-            )
-
-        if len(self.retrieval_precision.embeddings):
-            self.log(
-                f"{stage}.rp@1",
-                self.retrieval_precision.compute().mean(),
-                prog_bar=True,
-            )
-
+        self.log(
+            f"{stage}.rrk",
+            self.retrieval_reciprocal_rank.compute().mean(),
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True
+        )
         self.retrieval_reciprocal_rank.reset()
+
+        self.retrieval_precision.update(embeddings, **targets)
+        self.log(
+            f"{stage}.rp@1",
+            self.retrieval_precision.compute().mean(),
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+        )
+
         self.retrieval_precision.reset()
-
-    def on_validation_epoch_start(self) -> None:
-        """
-        Lightning has a specific order of callbacks.
-        https://github.com/PyTorchLightning/pytorch-lightning/issues/9811
-        To use the same metric object for both training and validation
-        stages, we need to reset metric manually
-        """
-        self._log_and_reset_metrics(TrainStage.TRAIN)
-
-    def on_validation_epoch_end(self) -> None:
-        self._log_and_reset_metrics(TrainStage.VALIDATION)
