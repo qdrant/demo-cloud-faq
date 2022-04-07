@@ -42,12 +42,7 @@ class ServeFAQDataset(Dataset):
             List[str]
         """
         with open(dataset_path, "r") as fd:
-            sentences = []
-            for json_line in fd:
-                line = json.loads(json_line)
-                sentences.append(line["question"])
-                sentences.append(line["answer"])
-            return sentences
+            return [json.loads(json_line)["answer"] for json_line in fd]
 
 
 if __name__ == "__main__":
@@ -55,18 +50,34 @@ if __name__ == "__main__":
 
     path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
     dataset = ServeFAQDataset(path)
-    dataloader = DataLoader(dataset, collate_fn=loaded_model.get_collate_fn())
+    dataloader = DataLoader(dataset)
 
-    embeddings = torch.Tensor()
-    loaded_model.eval()
-    with torch.inference_mode():
-        for batch in dataloader:
-            embeddings = torch.cat([embeddings, loaded_model(batch)])
+    questions = [
+        "what is amazon workspaces?",
+        # A: amazon workspaces is a managed, secure cloud desktop service
+        "are mysql database cluster connections encrypted?",
+        # A: connections between a database cluster and an application are always encrypted using
+        # ssl
+        "what is azure content moderator?",
+        # A: azure content moderator is an ai service that lets you handle content that is
+        # potentially offensive, risky, or otherwise undesirable
+        "what is the pricing of aws lambda functions powered by aws graviton2 processors?"
+        # A: aws lambda functions powered by aws graviton2 processors are 20% cheaper compared to
+        # x86-based lambda functions
+    ]
+
+    answer_embeddings = torch.Tensor()
+    for batch in dataloader:
+        answer_embeddings = torch.cat(
+            [answer_embeddings, loaded_model.encode(batch, to_numpy=False)]
+        )
 
     distance = Distance.get_by_name(Distance.COSINE)
-    distance_matrix = distance.distance_matrix(embeddings)
-    distance_matrix[torch.eye(distance_matrix.shape[0], dtype=torch.bool)] = 1.0
-    nearest = torch.argsort(distance_matrix, dim=-1)[:, 0]
-    for i in range(len(dataset)):
-        print("Anchor: ", dataset[i])
-        print("Nearest: ", dataset[nearest[i]], end="\n\n")
+    question_embeddings = loaded_model.encode(questions, to_numpy=False)
+    question_answers_distances = distance.distance_matrix(
+        question_embeddings, answer_embeddings
+    )
+    answers_indices = question_answers_distances.min(dim=1)[1]
+    for question_index, answer_index in enumerate(answers_indices):
+        print("Question: ", questions[question_index])
+        print("Answer: ", dataset[answer_index])

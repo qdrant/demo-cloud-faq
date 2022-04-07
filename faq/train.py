@@ -63,4 +63,4 @@ if __name__ == "__main__":
     train_path = os.path.join(DATA_DIR, "train_cloud_faq_dataset.jsonl")
     val_path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
     run(faq_model, train_path, val_path, parameters)
-    faq_model.save_servable("servable")
+    faq_model.save_servable(os.path.join(ROOT_DIR, "servable"))
