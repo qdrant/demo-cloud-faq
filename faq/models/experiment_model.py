@@ -19,7 +19,7 @@ from quaterion.utils.enums import TrainStage
 from quaterion.loss.similarity_loss import SimilarityLoss
 from quaterion.train.trainable_model import TrainableModel
 from quaterion.train.cache import CacheConfig, CacheType
-from quaterion.loss import MultipleNegativesRankingLoss
+from quaterion.loss import MultipleNegativesRankingLoss, ContrastiveLoss
 from quaterion_models.heads.encoder_head import EncoderHead
 from quaterion_models.encoders import Encoder
 
@@ -28,7 +28,6 @@ from faq.utils.metrics import (
     retrieval_reciprocal_rank_2d,
     retrieval_precision_2d,
 )
-from faq.models.fixed_contrastive_loss import FixedContrastiveLoss
 from faq.utils.utils import wrong_prediction_indices
 
 
@@ -65,7 +64,7 @@ class ExperimentModel(TrainableModel):
         return (
             MultipleNegativesRankingLoss(symmetric=True)
             if self._loss_fn == "mnr"
-            else FixedContrastiveLoss(margin=1)
+            else ContrastiveLoss(margin=1)
         )
 
     def process_results(

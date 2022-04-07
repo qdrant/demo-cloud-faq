@@ -39,6 +39,7 @@ def run(
         dirpath=serialization_dir,
         filename="epoch{epoch:02d}-val_loss{validation_loss:.4f}",
         auto_insert_metric_name=False,
+        every_n_epochs=30
     )
     sources = {"aws", "azure", "ibm", "yandex_cloud", "hetzner", "gcp"}
 
@@ -74,10 +75,10 @@ def run(
         callbacks=[
             checkpoint_callback,
             ModelSummary(max_depth=3),
-            EarlyStopping("validation_loss", patience=7),
+            EarlyStopping("validation_loss", patience=30),
         ],
         min_epochs=params.get("min_epochs", 1),
-        max_epochs=params.get("max_epochs", 150),
+        max_epochs=params.get("max_epochs", 500),
         auto_select_gpus=use_gpu,
         log_every_n_steps=params.get("log_every_n_steps", 1),
         gpus=int(use_gpu),
@@ -227,7 +228,7 @@ if __name__ == "__main__":
     ap.add_argument(
         "--max_epochs",
         type=int,
-        default=150,
+        default=500,
         help="Maximum number of epochs to run training",
     )
     ap.add_argument(
@@ -272,7 +273,7 @@ if __name__ == "__main__":
             # StackedModel,
             SkipConnectionModel,
         ):
-            for loss_fn in ["contrastive"]:  # also:  "mnr",
+            for loss_fn in ["mnr"]:  # also:  "mnr",
                 model_ = model_class(
                     pretrained_name=pretrained_name,
                     lr=parameters.get("lr"),
