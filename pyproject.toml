@@ -10,7 +10,7 @@ torch = "^1.11.0"
 quaterion = "^0.1.16"
 sentence-transformers = "^2.2.0"
 pandas = "^1.4.2"
-matplotlib = "^3.5.1"
+scikit-learn = "^1.0.2"
 
 [tool.poetry.dev-dependencies]
 
