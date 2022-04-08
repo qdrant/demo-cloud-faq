@@ -47,7 +47,6 @@ class ServeFAQDataset(Dataset):
 
 if __name__ == "__main__":
     loaded_model = MetricModel.load(os.path.join(ROOT_DIR, "servable"))
-
     path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
     dataset = ServeFAQDataset(path)
     dataloader = DataLoader(dataset)
@@ -55,25 +54,28 @@ if __name__ == "__main__":
     questions = [
         "what is amazon workspaces?",
         # A: amazon workspaces is a managed, secure cloud desktop service
-        "are mysql database cluster connections encrypted?",
-        # A: connections between a database cluster and an application are always encrypted using
-        # ssl
-        "what is azure content moderator?",
-        # A: azure content moderator is an ai service that lets you handle content that is
-        # potentially offensive, risky, or otherwise undesirable
-        "what is the pricing of aws lambda functions powered by aws graviton2 processors?"
+        "what is the pricing of aws lambda functions powered by aws graviton2 processors?",
         # A: aws lambda functions powered by aws graviton2 processors are 20% cheaper compared to
         # x86-based lambda functions
+        "can i run a cluster or job for a long time?",
+        # yes, you can run a cluster for as long as is required
+        "if i continue to use my own memcached clients with my elasticache cluster – will i be able to get this feature?"
+        # you can specify any currently supported version (minor and/or major) when creating a new
+        # cluster
     ]
 
     answer_embeddings = torch.Tensor()
     for batch in dataloader:
         answer_embeddings = torch.cat(
-            [answer_embeddings, loaded_model.encode(batch, to_numpy=False)]
+            [
+                answer_embeddings,
+                loaded_model.encode(batch, to_numpy=False),
+            ]
         )
 
     distance = Distance.get_by_name(Distance.COSINE)
     question_embeddings = loaded_model.encode(questions, to_numpy=False)
+    # WARNING: results will be incorrect until fixing of cosine distance matrix in quaterion
     question_answers_distances = distance.distance_matrix(
         question_embeddings, answer_embeddings
     )

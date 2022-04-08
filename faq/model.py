@@ -1,7 +1,7 @@
 from typing import Union, Dict, Optional, Any
 
 from torch import Tensor
-from torch.optim import AdamW
+from torch.optim import Adam
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.models import Transformer, Pooling
 
@@ -28,7 +28,7 @@ class FAQModel(TrainableModel):
         self.retrieval_reciprocal_rank = RetrievalReciprocalRank()
 
     def configure_optimizers(self):
-        return AdamW(self.model.parameters(), lr=self.lr)
+        return Adam(self.model.parameters(), lr=self.lr)
 
     def configure_loss(self) -> SimilarityLoss:
         return MultipleNegativesRankingLoss(symmetric=True)
@@ -44,7 +44,7 @@ class FAQModel(TrainableModel):
         return SkipConnectionHead(input_embedding_size)
 
     def configure_caches(self) -> Optional[CacheConfig]:
-        return CacheConfig(CacheType.AUTO, batch_size=64)
+        return CacheConfig(CacheType.AUTO, batch_size=1024)
 
     def process_results(
         self,

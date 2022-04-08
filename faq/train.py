@@ -13,8 +13,15 @@ def run(model, train_dataset_path, val_dataset_path, params):
     use_gpu = params.get("cuda", torch.cuda.is_available())
 
     checkpoint_callback = ModelCheckpoint(
-        monitor="validation_loss", mode="min", verbose=True, dirpath=checkpoint_dir,
+        monitor="validation_loss",
+        mode="min",
+        verbose=True,
+        dirpath=checkpoint_dir,
+        filename="epoch{epoch:02d}-val_loss{validation_loss:.4f}",
+        auto_insert_metric_name=False,
+        every_n_epochs=30
     )
+
 
     trainer = pl.Trainer(
         callbacks=[
