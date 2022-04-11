@@ -22,7 +22,6 @@ def run(model, train_dataset_path, val_dataset_path, params):
         every_n_epochs=30
     )
 
-
     trainer = pl.Trainer(
         callbacks=[
             checkpoint_callback,
@@ -30,7 +29,7 @@ def run(model, train_dataset_path, val_dataset_path, params):
             EarlyStopping(monitor="validation_loss", patience=7),
         ],
         min_epochs=params.get("min_epochs", 1),
-        max_epochs=params.get("max_epochs", 150),
+        max_epochs=params.get("max_epochs", 500),
         auto_select_gpus=use_gpu,
         log_every_n_steps=params.get("log_every_n_steps", 1),
         gpus=int(use_gpu),
@@ -60,9 +59,9 @@ if __name__ == "__main__":
     seed_everything(42, workers=True)
 
     pretrained_name = "all-MiniLM-L6-v2"
-    learning_rate = 10e-2
+    learning_rate = 10e-5
     parameters = {
-        "max_epochs": 150,
+        "max_epochs": 500,
         "train_batch_size": 1024,
         "val_batch_size": 1024,
         "checkpoint_dir": os.path.join(ROOT_DIR, "checkpoints"),
