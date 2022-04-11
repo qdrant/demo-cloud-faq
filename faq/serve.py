@@ -46,29 +46,30 @@ class ServeFAQDataset(Dataset):
 
 
 if __name__ == "__main__":
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     loaded_model = MetricModel.load(os.path.join(ROOT_DIR, "servable"))
+    loaded_model.to(device)
     path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
     dataset = ServeFAQDataset(path)
     dataloader = DataLoader(dataset)
 
     questions = [
-        "what is amazon workspaces?",
         "what is the pricing of aws lambda functions powered by aws graviton2 processors?",
         "can i run a cluster or job for a long time?",
-        "if i continue to use my own memcached clients with my elasticache cluster – will i be able to get this feature?",
+        "what is the dell open manage system administrator suite (omsa)?",
+        "what are the differences between the event streams standard and event streams enterprise plans?",
     ]
-    genuine_answers = [
-        "amazon workspaces is a managed, secure cloud desktop service",
-        "aws lambda functions powered by aws graviton2 processors are 20 % cheaper compared to x86-based lambda functions",
+    ground_truth_answers = [
+        "aws lambda functions powered by aws graviton2 processors are 20% cheaper compared to x86-based lambda functions",
         "yes, you can run a cluster for as long as is required",
-        "you can specify any currently supported version (minor and/or major) when creating a new cluster",
+        "omsa enables you to perform certain hardware configuration tasks and to monitor the hardware directly via the operating system",
+        "to find out more information about the different event streams plans, see choosing your plan",
     ]
-    genuine_answer_embeddings = loaded_model.encode(genuine_answers, to_numpy=False)
 
-    answer_embeddings = torch.Tensor()
+    answer_embeddings = torch.Tensor().to(device)
     for batch in dataloader:
         answer_embeddings = torch.cat(
-            [answer_embeddings, loaded_model.encode(batch, to_numpy=False),]
+            [answer_embeddings, loaded_model.encode(batch, to_numpy=False)]
         )
 
     distance = Distance.get_by_name(Distance.COSINE)
@@ -80,6 +81,7 @@ if __name__ == "__main__":
     for question_index, answer_index in enumerate(answers_indices):
         print("Question: ", questions[question_index])
         print("Answer: ", dataset[answer_index])
-        assert torch.allclose(
-            answer_embeddings[answer_index], genuine_answer_embeddings[question_index]
-        ), f"Right answer is: {genuine_answers[question_index]}"
+
+        assert (
+            dataset[answer_index] == ground_truth_answers[question_index]
+        ), f"<{dataset[answer_index]}> != <{ground_truth_answers[question_index]}>"
