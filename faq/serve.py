@@ -53,29 +53,26 @@ if __name__ == "__main__":
 
     questions = [
         "what is amazon workspaces?",
-        # A: amazon workspaces is a managed, secure cloud desktop service
         "what is the pricing of aws lambda functions powered by aws graviton2 processors?",
-        # A: aws lambda functions powered by aws graviton2 processors are 20% cheaper compared to
-        # x86-based lambda functions
         "can i run a cluster or job for a long time?",
-        # yes, you can run a cluster for as long as is required
-        "if i continue to use my own memcached clients with my elasticache cluster – will i be able to get this feature?"
-        # you can specify any currently supported version (minor and/or major) when creating a new
-        # cluster
+        "if i continue to use my own memcached clients with my elasticache cluster – will i be able to get this feature?",
     ]
+    genuine_answers = [
+        "amazon workspaces is a managed, secure cloud desktop service",
+        "aws lambda functions powered by aws graviton2 processors are 20 % cheaper compared to x86-based lambda functions",
+        "yes, you can run a cluster for as long as is required",
+        "you can specify any currently supported version (minor and/or major) when creating a new cluster",
+    ]
+    genuine_answer_embeddings = loaded_model.encode(genuine_answers, to_numpy=False)
 
     answer_embeddings = torch.Tensor()
     for batch in dataloader:
         answer_embeddings = torch.cat(
-            [
-                answer_embeddings,
-                loaded_model.encode(batch, to_numpy=False),
-            ]
+            [answer_embeddings, loaded_model.encode(batch, to_numpy=False),]
         )
 
     distance = Distance.get_by_name(Distance.COSINE)
     question_embeddings = loaded_model.encode(questions, to_numpy=False)
-    # WARNING: results will be incorrect until fixing of cosine distance matrix in quaterion
     question_answers_distances = distance.distance_matrix(
         question_embeddings, answer_embeddings
     )
@@ -83,3 +80,6 @@ if __name__ == "__main__":
     for question_index, answer_index in enumerate(answers_indices):
         print("Question: ", questions[question_index])
         print("Answer: ", dataset[answer_index])
+        assert torch.allclose(
+            answer_embeddings[answer_index], genuine_answer_embeddings[question_index]
+        ), f"Right answer is: {genuine_answers[question_index]}"
