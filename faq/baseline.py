@@ -72,24 +72,30 @@ def process(filename):
     labels[torch.diag_embed(ones_vec, -num_of_pairs) > 0] = 1  # Fill diagonal
     # with offset of num_of_pairs to the bottom. First elements of pairs are on
     # those indices.
-    anchors_rows = predicted_similarity[:num_of_pairs]
-    anchors_columns = anchors_rows[:, num_of_pairs:]
-    others_rows = predicted_similarity[num_of_pairs:]
-    others_columns = others_rows[:, :num_of_pairs]
-    fetched_predicted_similarity = torch.cat([anchors_columns, others_columns])
 
-    anchors_labels_rows = labels[:num_of_pairs]
-    anchors_labels_columns = anchors_labels_rows[:, num_of_pairs:]
-    others_labels_rows = labels[num_of_pairs:]
-    others_labels_columns = others_labels_rows[:, :num_of_pairs]
-    fetched_labels = torch.cat([anchors_labels_columns, others_labels_columns])
+    # Use only left-bottom and right-upper angles of similarity matrix to calculate metrics
+    # It allows looking for nearest object for question only among possible answers
+    # and vice versa - looking for nearest object for answer only among possible questions]
+
+    # anchors_rows = predicted_similarity[:num_of_pairs]
+    # anchors_columns = anchors_rows[:, num_of_pairs:]
+    # others_rows = predicted_similarity[num_of_pairs:]
+    # others_columns = others_rows[:, :num_of_pairs]
+    # fetched_predicted_similarity = torch.cat([anchors_columns, others_columns])
+
+    # anchors_labels_rows = labels[:num_of_pairs]
+    # anchors_labels_columns = anchors_labels_rows[:, num_of_pairs:]
+    # others_labels_rows = labels[num_of_pairs:]
+    # others_labels_columns = others_labels_rows[:, :num_of_pairs]
+    # fetched_labels = torch.cat([anchors_labels_columns, others_labels_columns])
+
     metrics = {
         "rrk": retrieval_reciprocal_rank_2d(
-            fetched_predicted_similarity, fetched_labels
+            predicted_similarity, labels
         )
         .mean()
         .item(),
-        "rp@1": retrieval_precision_2d(fetched_predicted_similarity, fetched_labels)
+        "rp@1": retrieval_precision_2d(predicted_similarity, labels)
         .mean()
         .item(),
     }
