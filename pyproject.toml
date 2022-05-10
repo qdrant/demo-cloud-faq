@@ -7,7 +7,7 @@ authors = ["George Panchuk"]
 [tool.poetry.dependencies]
 python = ">=3.8,<3.10"
 torch = "^1.11.0"
-quaterion = "^0.1.18"
+quaterion = ">=0.1.19"
 sentence-transformers = "^2.2.0"
 pandas = "^1.4.2"
 scikit-learn = "^1.0.2"
