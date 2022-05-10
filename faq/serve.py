@@ -19,6 +19,7 @@ if __name__ == "__main__":
 
     # everything is ready, let's encode our answers
     answer_embeddings = model.encode(answers, to_numpy=False)
+
     # Some prepared questions and answers to ensure that our model works as intended
     questions = [
         "what is the pricing of aws lambda functions powered by aws graviton2 processors?",
@@ -43,7 +44,6 @@ if __name__ == "__main__":
     for q_ind, a_ind in enumerate(answers_indices):
         print("Q:", questions[q_ind])
         print("A:", answers[a_ind], end="\n\n")
-
         assert (
             answers[a_ind] == ground_truth_answers[q_ind]
         ), f"<{answers[a_ind]}> != <{ground_truth_answers[q_ind]}>"

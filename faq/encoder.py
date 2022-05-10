@@ -1,12 +1,8 @@
 import os
-
-from typing import List
-
-from quaterion_models.types import TensorInterchange, CollateFnType
 from torch import Tensor, nn
-from quaterion_models.encoders import Encoder
 from sentence_transformers.models import Transformer, Pooling
-from quaterion.dataset.similarity_samples import SimilarityPairSample
+from quaterion_models.types import TensorInterchange, CollateFnType
+from quaterion_models.encoders import Encoder
 
 
 class FAQEncoder(Encoder):
@@ -18,24 +14,17 @@ class FAQEncoder(Encoder):
 
     @property
     def trainable(self) -> bool:
-        """Defines if encoder is trainable.
-
-        This flag affects caching and checkpoint saving of the encoder.
-        """
         return False
 
     @property
     def embedding_size(self) -> int:
         return self.transformer.get_word_embedding_dimension()
 
-    def text_collate(self, batch: List[SimilarityPairSample]):
-        return self.transformer.tokenize(batch)
-
-    def get_collate_fn(self) -> CollateFnType:
-        return self.text_collate
-
     def forward(self, batch: TensorInterchange) -> Tensor:
         return self.encoder(batch)["sentence_embedding"]
+
+    def get_collate_fn(self) -> CollateFnType:
+        return self.transformer.tokenize
 
     @staticmethod
     def _transformer_path(path: str):
