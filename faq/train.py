@@ -15,11 +15,11 @@ def train(model, train_dataset_path, val_dataset_path, params):
 
     trainer = pl.Trainer(
         min_epochs=params.get("min_epochs", 1),
-        max_epochs=params.get("max_epochs", 2),
+        max_epochs=params.get("max_epochs", 300),
         auto_select_gpus=use_gpu,
-        log_every_n_steps=params.get("log_every_n_steps", 1),
+        log_every_n_steps=params.get("log_every_n_steps", 10),
         gpus=int(use_gpu),
-        num_sanity_val_steps=0,
+        num_sanity_val_steps=2,
     )
     train_dataset = FAQDataset(train_dataset_path)
     val_dataset = FAQDataset(val_dataset_path)
@@ -48,4 +48,4 @@ if __name__ == "__main__":
     train_path = os.path.join(DATA_DIR, "train_part.jsonl")
     val_path = os.path.join(DATA_DIR, "val_part.jsonl")
     train(faq_model, train_path, val_path, {})
-    # faq_model.save_servable(os.path.join(ROOT_DIR, "servable"))
+    faq_model.save_servable(os.path.join(ROOT_DIR, "servable"))
