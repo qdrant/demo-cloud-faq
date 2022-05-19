@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "quaterion-faq-demo"
 version = "0.1.0"
-description = "Question-answering via metric learning and Quaterion."
+description = "Question-answering via similarity learning and Quaterion."
 authors = ["George Panchuk"]
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.10"
 torch = "^1.11.0"
-quaterion = ">=0.1.20"
+quaterion = ">=0.1.21"
 sentence-transformers = "^2.2.0"
 pandas = "^1.4.2"
 scikit-learn = "^1.0.2"
