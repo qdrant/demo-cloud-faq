@@ -2,7 +2,7 @@ import os
 import json
 
 import torch
-from quaterion_models.model import MetricModel
+from quaterion_models.model import SimilarityModel
 from quaterion.distances import Distance
 
 from faq.config import DATA_DIR, ROOT_DIR
@@ -10,7 +10,7 @@ from faq.config import DATA_DIR, ROOT_DIR
 
 if __name__ == "__main__":
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    model = MetricModel.load(os.path.join(ROOT_DIR, "servable"))
+    model = SimilarityModel.load(os.path.join(ROOT_DIR, "servable"))
     model.to(device)
     dataset_path = os.path.join(DATA_DIR, "val_cloud_faq_dataset.jsonl")
 
