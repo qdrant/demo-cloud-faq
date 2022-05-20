@@ -52,4 +52,4 @@ class FAQModel(TrainableModel):
         return SkipConnectionHead(input_embedding_size)
 
     def configure_caches(self) -> Optional[CacheConfig]:
-        return CacheConfig(CacheType.AUTO, batch_size=1024)
+        return CacheConfig(CacheType.AUTO, batch_size=256)
