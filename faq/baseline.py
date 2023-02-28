@@ -53,9 +53,8 @@ def process(filename):
     sentences_ = load_sentences(filename)  # load sentences, first half contains
     # all first elements, second half contains all second elements
     embeddings = model.encode(sentences_, convert_to_tensor=True)
-    distance_matrix = ContrastiveLoss().distance_metric(
-        embeddings, embeddings, matrix=True
-    )  # compute quadratic matrix of distances
+    distance = ContrastiveLoss().distance_metric()
+    distance_matrix = distance.distance_matrix(embeddings)  # compute quadratic matrix of distances
     distance_matrix[torch.eye(embeddings.shape[0], dtype=torch.bool)] = 2.0  # max
     # cosine distance is 2, set max distance between element and itself to avoid
     # paying attention to it
