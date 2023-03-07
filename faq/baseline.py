@@ -71,11 +71,6 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         model.cuda()
 
-    from quaterion_models import SimilarityModel
-    from faq.config import ROOT_DIR
-
-    model = SimilarityModel.load(os.path.join(ROOT_DIR, 'servable'))
-
     filename = "val_cloud_faq_dataset.jsonl"
     filepath = os.path.join(DATA_DIR, filename)
     data = load_data(filepath)
